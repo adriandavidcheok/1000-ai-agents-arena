@@ -9,19 +9,31 @@ from io import BytesIO
 
 st.set_page_config(page_title="1000 AI Agents Arena", layout="wide")
 
-# ====================== SESSION STATE ======================
+# Custom CSS - makes the Current Task banner STICKY at the very top
+st.markdown("""
+<style>
+    .sticky-header {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        background-color: #0E1117;
+        padding: 10px 0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "current_prompt" not in st.session_state:
     st.session_state.current_prompt = None
 
 # ====================== STICKY TOP BANNER ======================
-st.title("🌀 1000 AI Agents Arena")
-st.caption("Live in your browser • Shareable link • Code + LaTeX + Word")
-
-# Make banner stay at the very top
-if st.session_state.current_prompt:
-    st.success(f"**Current Task (always visible at top):** {st.session_state.current_prompt}")
+with st.container():
+    st.title("🌀 1000 AI Agents Arena")
+    st.caption("Live in your browser • Shareable link • Code + LaTeX + Word")
+    if st.session_state.current_prompt:
+        st.success(f"**Current Task (always visible at top):** {st.session_state.current_prompt}")
 
 # ====================== SIDEBAR ======================
 with st.sidebar:
@@ -33,7 +45,7 @@ with st.sidebar:
     num_agents = st.slider("Number of AI Agents", 100, 1000, 300, step=50)
 
 # ====================== PERSONAS ======================
-PERSONAS = ["Python Coder", "LaTeX Architect", "Code Reviewer", "Document Engineer", "Algorithm Expert", "Math LaTeX Specialist", "Debugging Wizard", "Research Coder", "Full-Stack Developer", "Scientific Writer"] * 100
+PERSONAS = ["Python Coder", "LaTeX Architect", "Code Reviewer", "Document Engineer", "Algorithm Expert", "Math LaTeX Specialist", "Debugging Wizard", "Research Coder", "Full-Stack Developer", "Scientific Writer"] * 50
 
 # ====================== CHAT HISTORY ======================
 for msg in st.session_state.messages:
@@ -59,41 +71,29 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
 
         client = OpenAI()
         all_contributions = []
-        batch_size = 50
-        max_workers = 40
 
         def get_agent_response(i):
             persona = random.choice(PERSONAS)
             agent_id = f"Agent #{i+1}"
-            system_prompt = f"""
-            You are {persona} in a swarm of {num_agents} AI agents.
-            User request: {prompt}
-            Respond EXACTLY in this format:
-            Thinking: [one short sentence]
-            Contribution: [your full response]
-            """
             try:
                 response = client.chat.completions.create(
                     model=model,
-                    messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": "Contribute now!"}],
+                    messages=[{"role": "system", "content": f"You are {persona} in a swarm of {num_agents} agents. User request: {prompt}. Respond EXACTLY in this format:\nThinking: [one short sentence]\nContribution: [your full response]"}],
                     temperature=0.85,
                     max_tokens=400
                 )
                 reply = response.choices[0].message.content.strip()
-                if "Thinking:" in reply and "Contribution:" in reply:
-                    thinking = reply.split("Thinking:")[1].split("Contribution:")[0].strip()
-                    contribution = reply.split("Contribution:")[1].strip()
-                else:
-                    thinking = reply[:120]
-                    contribution = reply
+                thinking = reply.split("Contribution:")[0].replace("Thinking:", "").strip() if "Contribution:" in reply else reply[:100]
+                contribution = reply.split("Contribution:")[1].strip() if "Contribution:" in reply else reply
                 return thinking, contribution, f"**{agent_id} — {persona}**"
-            except Exception as e:
+            except Exception:
                 return "Error", "", f"**{agent_id}**"
 
+        batch_size = 50
         for batch_start in range(0, num_agents, batch_size):
             batch_end = min(batch_start + batch_size, num_agents)
             status_text.text(f"🚀 Launching batch {batch_start//batch_size + 1}...")
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
                 futures = [executor.submit(get_agent_response, i) for i in range(batch_start, batch_end)]
                 for idx, future in enumerate(concurrent.futures.as_completed(futures)):
                     thinking, contribution, header = future.result()
@@ -108,16 +108,15 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
     # RIGHT COLUMN - Three Preview Windows
     with right_col:
         st.subheader("📄 Final Preview & Downloads")
-        client = OpenAI()   # reuse client
+        client = OpenAI()
 
         synthesis_prompt = f"""
-        You are the Master Synthesizer.
-        Full swarm input: {''.join(all_contributions)}
+        You are the Master Synthesizer. Full swarm input: {''.join(all_contributions[:50])}
         User request: {prompt}
         Produce:
         1. Brief summary
-        2. Complete Python code in ```python block
-        3. Full professional LaTeX document
+        2. Complete ready-to-run Python code in ```python block
+        3. Full professional LaTeX document starting with \\documentclass
         """
         final_response = client.chat.completions.create(
             model=model,
@@ -127,39 +126,39 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
         )
         final_text = final_response.choices[0].message.content
 
-        # Preview 1 - Python
+        # Python Preview
         st.markdown("**🐍 Python Code**")
         if "```python" in final_text:
             code_start = final_text.find("```python") + 9
             code_end = final_text.find("```", code_start)
             python_code = final_text[code_start:code_end].strip()
             st.code(python_code, language="python")
-            st.download_button("📥 Download Python (.py)", python_code, "agent_code.py", key="py1")
+            st.download_button("📥 Download Python (.py)", python_code, "agent_code.py")
         else:
-            st.info("No Python code generated.")
+            st.info("No Python code generated this time.")
 
-        # Preview 2 - LaTeX
+        # LaTeX Preview
         st.markdown("**📜 LaTeX Document**")
         if "\\documentclass" in final_text:
             latex_start = final_text.find("\\documentclass")
             latex_code = final_text[latex_start:].strip()
-            st.code(latex_code[:1400] + "\n... (full document)", language="latex")
-            st.download_button("📥 Download LaTeX (.tex)", latex_code, "agent_paper.tex", key="tex1")
-            st.latex(latex_code[:700] + "\n..." if len(latex_code) > 700 else latex_code)
+            st.code(latex_code[:1500] + "\n... (full document)", language="latex")
+            st.download_button("📥 Download LaTeX (.tex)", latex_code, "agent_paper.tex")
+            st.latex(latex_code[:800] + "\n..." if len(latex_code) > 800 else latex_code)
         else:
-            st.info("No LaTeX document generated.")
+            st.info("No LaTeX document generated this time.")
 
-        # Preview 3 - Word
+        # Word Preview
         st.markdown("**📝 Word Document**")
         doc = Document()
         doc.add_heading("1000 AI Agents Output", 0)
-        doc.add_paragraph(final_text[:2800])
+        doc.add_paragraph(final_text[:2500])
         bio = BytesIO()
         doc.save(bio)
         st.download_button("📥 Download Word (.docx)", bio.getvalue(), "agent_document.docx",
-                          "application/vnd.openxmlformats-officedocument.wordprocessingml.document", key="docx1")
+                          "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
     # Save to history
-    st.session_state.messages.append({"role": "assistant", "content": f"**{num_agents} AI Agents Swarm completed** — see right column for outputs"})
+    st.session_state.messages.append({"role": "assistant", "content": f"**{num_agents} AI Agents Swarm completed** — see right column"})
 
-st.caption("💡 Your public link is ready for the press release! Refresh the page to start a new task.")
+st.caption("💡 Refresh the page to start a new task. Your public link is ready for the press release!")
