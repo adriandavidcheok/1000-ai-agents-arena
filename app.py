@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 from openai import OpenAI
+import concurrent.futures
 import time
 import random
 from io import BytesIO
@@ -22,7 +23,7 @@ if "current_prompt" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive LaTeX Builder")
-    st.markdown("**Version 26.0 - Faster AI Army**")
+    st.markdown("**Version 26.1 - Fixed & Faster AI Army**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -61,7 +62,7 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
         def get_agent_response(i, round_num):
             persona = random.choice(PERSONAS)
-            agent_id = f"Agent #{random.randint(1,9999)}"   # random ID for chaotic feel
+            agent_id = f"Agent #{random.randint(1,9999)}"
             last_messages = "\n".join(conversation_history[-10:]) if conversation_history else "No previous messages."
             try:
                 response = client.chat.completions.create(
@@ -90,7 +91,7 @@ if prompt := st.chat_input("Ask the swarm anything..."):
                         st.markdown(f"• {header} thinks: {thinking}")
                     with open(tex_filename, "a") as f:
                         f.write("\n\n" + contribution)
-                    time.sleep(0.02)   # very fast now
+                    time.sleep(0.02)
 
         st.success(f"✅ AI Army conversation finished!")
 
@@ -103,4 +104,4 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
     st.session_state.messages.append({"role": "assistant", "content": f"**AI Army conversation completed**"})
 
-st.caption("💡 Faster version. Left conversation auto-scrolls and shows latest agents. Right LaTeX box is fixed with its own scroll bar.")
+st.caption("💡 Faster version with parallel agent calls. Left conversation auto-scrolls. Right LaTeX box has its own scroll bar.")
