@@ -147,4 +147,8 @@ if prompt := st.chat_input("Ask the swarm anything..."):
             bio = BytesIO()
             doc.save(bio)
             st.download_button("📥 Download Word (.docx)", bio.getvalue(), "agent_document.docx",
-                              "application/vnd.openxmlformats-officedocument.wordprocessingml.document
+                              "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+    st.session_state.messages.append({"role": "assistant", "content": f"**{num_agents} AI Agents × {num_rounds} rounds completed** — see right column"})
+
+st.caption("💡 Each preview now has its own scroll bar inside an expander. Right column stays visible.")
