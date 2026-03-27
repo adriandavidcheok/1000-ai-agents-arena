@@ -22,7 +22,7 @@ if "current_prompt" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive LaTeX Builder")
-    st.markdown("**Version 24.1 - Faster AI Army**")
+    st.markdown("**Version 25.0 - Faster AI Army (120 agents)**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -31,8 +31,8 @@ with st.sidebar:
     api_key = st.text_input("OpenAI API Key", type="password", value=os.getenv("OPENAI_API_KEY", ""))
     if api_key:
         os.environ["OPENAI_API_KEY"] = api_key
-    model = st.selectbox("Latest Model", ["gpt-4o", "gpt-4o-mini", "o1-preview"], index=0)
-    num_agents = st.slider("Number of AI Agents", 50, 1000, 150, step=50)   # lowered default for speed
+    model = st.selectbox("Latest Model", ["gpt-4o-mini", "gpt-4o", "o1-preview"], index=0)
+    num_agents = st.slider("Number of AI Agents", 50, 1000, 120, step=50)
     num_rounds = st.slider("Conversation Rounds", 3, 10, 5)
 
 PERSONAS = ["LaTeX Architect", "Scientific Writer", "Math LaTeX Specialist", "Document Engineer", "Research Coder", "Critic", "Optimist", "Devil's Advocate"] * 60
@@ -82,13 +82,13 @@ if prompt := st.chat_input("Ask the swarm anything..."):
             for i in range(num_agents):
                 thinking, contribution, header = get_agent_response(i, round_num)
                 conversation_history.append(f"{header}: {contribution}")
-                if len(conversation_history) > 12:
+                if len(conversation_history) > 15:
                     conversation_history.pop(0)
                 with army_container:
                     st.markdown(f"• {header} thinks: {thinking}")
                 with open(tex_filename, "a") as f:
                     f.write("\n\n" + contribution)
-                time.sleep(0.03)   # much faster now
+                time.sleep(0.03)   # very fast now
 
         st.success(f"✅ AI Army conversation finished!")
 
@@ -101,4 +101,4 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
     st.session_state.messages.append({"role": "assistant", "content": f"**AI Army conversation completed**"})
 
-st.caption("💡 Faster version with auto-scrolling conversation on the left and fixed scrollable LaTeX on the right.")
+st.caption("💡 Faster version. Left conversation auto-scrolls and shows latest agents. Right LaTeX box is fixed with its own scroll bar.")
