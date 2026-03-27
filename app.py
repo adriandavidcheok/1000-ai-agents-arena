@@ -1,7 +1,6 @@
 import streamlit as st
 import os
 from openai import OpenAI
-import concurrent.futures
 import time
 import random
 from io import BytesIO
@@ -10,8 +9,24 @@ st.set_page_config(page_title="1000 AI Agents Arena", layout="wide")
 
 st.markdown("""
 <style>
-    .army-box { max-height: 580px; overflow-y: auto; border: 1px solid #262730; padding: 12px; border-radius: 8px; background-color: #1E2127; }
-    .latex-box { max-height: 620px; overflow-y: auto; border: 1px solid #262730; padding: 15px; border-radius: 8px; background-color: #1E2127; font-family: monospace; white-space: pre-wrap; }
+    .army-box { 
+        max-height: 580px; 
+        overflow-y: auto; 
+        border: 1px solid #262730; 
+        padding: 12px; 
+        border-radius: 8px; 
+        background-color: #1E2127; 
+    }
+    .latex-box { 
+        max-height: 620px; 
+        overflow-y: auto; 
+        border: 1px solid #262730; 
+        padding: 15px; 
+        border-radius: 8px; 
+        background-color: #1E2127; 
+        font-family: monospace; 
+        white-space: pre-wrap; 
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -23,7 +38,7 @@ if "current_prompt" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive LaTeX Builder")
-    st.markdown("**Version 26.1 - Fixed & Faster AI Army**")
+    st.markdown("**Version 26.2 - Auto-Scrolling AI Army**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -57,6 +72,7 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     with col_left:
         st.subheader("🔥 AI Army Conversation (agents talking to each other)")
         army_container = st.container(height=580)
+
         client = OpenAI()
         conversation_history = []
 
@@ -80,18 +96,23 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
         for round_num in range(1, num_rounds + 1):
             st.write(f"**Round {round_num} of {num_rounds}**")
-            with concurrent.futures.ThreadPoolExecutor(max_workers=80) as executor:
-                futures = [executor.submit(get_agent_response, i, round_num) for i in range(num_agents)]
-                for future in concurrent.futures.as_completed(futures):
-                    thinking, contribution, header = future.result()
-                    conversation_history.append(f"{header}: {contribution}")
-                    if len(conversation_history) > 15:
-                        conversation_history.pop(0)
-                    with army_container:
-                        st.markdown(f"• {header} thinks: {thinking}")
-                    with open(tex_filename, "a") as f:
-                        f.write("\n\n" + contribution)
-                    time.sleep(0.02)
+            for i in range(num_agents):
+                thinking, contribution, header = get_agent_response(i, round_num)
+                conversation_history.append(f"{header}: {contribution}")
+                if len(conversation_history) > 15:
+                    conversation_history.pop(0)
+                
+                # Display the new message
+                with army_container:
+                    st.markdown(f"• {header} thinks: {thinking}")
+                
+                # Force auto-scroll to bottom
+                st.markdown('<script>var objDiv = document.querySelector(".army-box"); if(objDiv) objDiv.scrollTop = objDiv.scrollHeight;</script>', unsafe_allow_html=True)
+                
+                with open(tex_filename, "a") as f:
+                    f.write("\n\n" + contribution)
+                
+                time.sleep(0.03)   # fast but visible
 
         st.success(f"✅ AI Army conversation finished!")
 
@@ -104,4 +125,4 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
     st.session_state.messages.append({"role": "assistant", "content": f"**AI Army conversation completed**"})
 
-st.caption("💡 Faster version with parallel agent calls. Left conversation auto-scrolls. Right LaTeX box has its own scroll bar.")
+st.caption("💡 Left conversation now auto-scrolls to the latest messages. Right LaTeX box has its own vertical scroll bar.")
