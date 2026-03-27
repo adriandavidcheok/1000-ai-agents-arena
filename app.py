@@ -11,8 +11,6 @@ st.markdown("""
 <style>
     .army-box { max-height: 580px; overflow-y: auto; border: 1px solid #262730; padding: 12px; border-radius: 8px; background-color: #1E2127; }
     .latex-box { max-height: 620px; overflow-y: auto; border: 1px solid #262730; padding: 15px; border-radius: 8px; background-color: #1E2127; font-family: monospace; white-space: pre-wrap; }
-    /* Auto-scroll script */
-    .auto-scroll { scroll-behavior: smooth; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -24,7 +22,7 @@ if "current_prompt" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive LaTeX Builder")
-    st.markdown("**Version 24.0 - Auto-Scrolling AI Army Conversation**")
+    st.markdown("**Version 24.1 - Faster AI Army**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -34,8 +32,8 @@ with st.sidebar:
     if api_key:
         os.environ["OPENAI_API_KEY"] = api_key
     model = st.selectbox("Latest Model", ["gpt-4o", "gpt-4o-mini", "o1-preview"], index=0)
-    num_agents = st.slider("Number of AI Agents", 100, 1000, 200, step=50)   # lowered default for speed
-    num_rounds = st.slider("Conversation Rounds", 4, 10, 5)
+    num_agents = st.slider("Number of AI Agents", 50, 1000, 150, step=50)   # lowered default for speed
+    num_rounds = st.slider("Conversation Rounds", 3, 10, 5)
 
 PERSONAS = ["LaTeX Architect", "Scientific Writer", "Math LaTeX Specialist", "Document Engineer", "Research Coder", "Critic", "Optimist", "Devil's Advocate"] * 60
 
@@ -55,11 +53,9 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
     col_left, col_right = st.columns([2, 1])
 
-    # LEFT COLUMN - Auto-scrolling AI Army Conversation
     with col_left:
         st.subheader("🔥 AI Army Conversation (agents talking to each other)")
         army_container = st.container(height=580)
-
         client = OpenAI()
         conversation_history = []
 
@@ -92,8 +88,17 @@ if prompt := st.chat_input("Ask the swarm anything..."):
                     st.markdown(f"• {header} thinks: {thinking}")
                 with open(tex_filename, "a") as f:
                     f.write("\n\n" + contribution)
-                time.sleep(0.05)   # much faster now
+                time.sleep(0.03)   # much faster now
 
         st.success(f"✅ AI Army conversation finished!")
 
-    # RIGHT COLUMN
+    with col_right:
+        st.subheader("📜 Massive LaTeX Document (fixed scrollable)")
+        with open(tex_filename, "r") as f:
+            final_latex = f.read()
+        st.markdown('<div class="latex-box">' + st.code(final_latex, language="latex") + '</div>', unsafe_allow_html=True)
+        st.download_button("📥 Download Full LaTeX (.tex)", final_latex, "massive_paper.tex")
+
+    st.session_state.messages.append({"role": "assistant", "content": f"**AI Army conversation completed**"})
+
+st.caption("💡 Faster version with auto-scrolling conversation on the left and fixed scrollable LaTeX on the right.")
