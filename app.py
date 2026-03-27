@@ -38,7 +38,7 @@ if "current_prompt" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive LaTeX Builder")
-    st.markdown("**Version 28.0 - Clean 3-Agent Fixed Box**")
+    st.markdown("**Version 28.0 - Only Latest 3 Agents Visible**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -73,7 +73,7 @@ if prompt := st.chat_input("Ask the swarm anything..."):
         st.subheader("🔥 AI Army Conversation (only latest 3 agents visible)")
         army_container = st.container(height=220)
         client = OpenAI()
-        latest_agents = []   # keeps only the latest 3
+        latest_agents = []  # keeps ONLY the latest 3
 
         def get_agent_response(i, round_num):
             persona = random.choice(PERSONAS)
@@ -98,8 +98,8 @@ if prompt := st.chat_input("Ask the swarm anything..."):
                 thinking, contribution, header = get_agent_response(i, round_num)
                 latest_agents.append(f"• {header} thinks: {thinking}")
                 if len(latest_agents) > 3:
-                    latest_agents.pop(0)   # remove oldest
-                
+                    latest_agents.pop(0)  # remove oldest
+
                 with army_container:
                     st.markdown("\n".join(latest_agents))
                 
@@ -119,4 +119,4 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
     st.session_state.messages.append({"role": "assistant", "content": f"**AI Army conversation completed**"})
 
-st.caption("💡 Left box now shows ONLY the latest 3 agents and never scrolls. Right LaTeX box is fixed with its own scroll bar.")
+st.caption("💡 Left box shows ONLY the latest 3 agents. Right LaTeX box is fixed with its own scroll bar.")
