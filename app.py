@@ -9,13 +9,15 @@ from io import BytesIO
 
 st.set_page_config(page_title="1000 AI Agents Arena", layout="wide")
 
-# Sticky header
+# CSS: sticky right column + sticky top banner
 st.markdown("""
 <style>
-    .sticky { position: sticky; top: 0; z-index: 1000; background-color: #0E1117; padding: 10px 0; }
+    .sticky-header { position: sticky; top: 0; z-index: 1000; background-color: #0E1117; padding: 10px 0; border-bottom: 1px solid #262730; }
+    .sticky-right { position: sticky; top: 80px; z-index: 999; align-self: start; }
 </style>
 """, unsafe_allow_html=True)
 
+# Session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "current_prompt" not in st.session_state:
@@ -25,7 +27,7 @@ if "current_prompt" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Code + LaTeX + Word")
-    st.markdown("**Version 12.0 - Debug Mode**")   # ← YOU SHOULD SEE THIS
+    st.markdown("**Version 13.0 - Sticky Right Column**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -38,16 +40,13 @@ with st.sidebar:
     model = st.selectbox("Model", ["gpt-4o-mini", "gpt-4o"], index=0)
     num_agents = st.slider("Number of AI Agents", 100, 1000, 300, step=50)
 
-# ====================== PERSONAS ======================
 PERSONAS = ["Python Coder", "LaTeX Architect", "Code Reviewer", "Document Engineer", "Algorithm Expert", "Math LaTeX Specialist", "Debugging Wizard", "Research Coder", "Full-Stack Developer", "Scientific Writer"] * 50
 
-# ====================== CHAT HISTORY ======================
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# ====================== USER INPUT ======================
-if prompt := st.chat_input("Ask the swarm anything..."):
+if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simulator in Python and write the full LaTeX paper + Word version')"):
     st.session_state.current_prompt = prompt
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -56,7 +55,7 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     # ====================== TWO-COLUMN LAYOUT ======================
     col_left, col_right = st.columns([2, 1])
 
-    # LEFT COLUMN - Swarm
+    # LEFT COLUMN - Swarm (can scroll)
     with col_left:
         st.subheader("🔥 Live Swarm — Agents Thinking")
         progress_bar = st.progress(0)
@@ -99,10 +98,10 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
         st.success(f"✅ All {num_agents} agents contributed!")
 
-    # RIGHT COLUMN - Previews (with debug + try/except)
+    # RIGHT COLUMN - Sticky previews
     with col_right:
         st.subheader("📄 Final Preview & Downloads")
-        st.write("✅ RIGHT COLUMN IS EXECUTING")   # ← DEBUG TEXT - YOU SHOULD SEE THIS
+        st.write("✅ RIGHT COLUMN IS EXECUTING")   # debug
 
         try:
             client = OpenAI()
@@ -122,8 +121,6 @@ if prompt := st.chat_input("Ask the swarm anything..."):
                 max_tokens=4000
             )
             final_text = final_response.choices[0].message.content
-
-            st.write("✅ Synthesis completed successfully")   # ← DEBUG TEXT
 
             # Python
             st.markdown("**🐍 Python Code**")
@@ -158,9 +155,8 @@ if prompt := st.chat_input("Ask the swarm anything..."):
                               "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
         except Exception as e:
-            st.error(f"Right column error: {str(e)[:200]}")
-            st.write("❌ Right column failed — please tell me the error message above")
+            st.error(f"Error: {str(e)[:150]}")
 
     st.session_state.messages.append({"role": "assistant", "content": f"**{num_agents} AI Agents Swarm completed** — see right column"})
 
-st.caption("💡 If you see the debug text 'RIGHT COLUMN IS EXECUTING' and the three preview sections, the layout is working!")
+st.caption("💡 The right column should now stay visible even when the left side scrolls.")
