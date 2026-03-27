@@ -9,10 +9,18 @@ from io import BytesIO
 
 st.set_page_config(page_title="1000 AI Agents Arena", layout="wide")
 
-# Sticky top banner
+# CSS for sticky top + fixed-height scrollable previews
 st.markdown("""
 <style>
     .sticky { position: sticky; top: 0; z-index: 1000; background-color: #0E1117; padding: 10px 0; border-bottom: 1px solid #262730; }
+    .preview-box {
+        max-height: 520px;
+        overflow-y: auto;
+        border: 1px solid #262730;
+        padding: 12px;
+        border-radius: 8px;
+        background-color: #1E2127;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -25,7 +33,7 @@ if "current_prompt" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Code + LaTeX + Word")
-    st.markdown("**Version 16.0 - Scrollable Previews + Single Agent**")
+    st.markdown("**Version 17.0 - Fixed-Size Scrollable Previews**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -53,7 +61,7 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
     col_left, col_right = st.columns([2, 1])
 
-    # LEFT COLUMN - Single agent overwrite (no scrolling)
+    # LEFT COLUMN - Single agent overwrite
     with col_left:
         st.subheader("🔥 Live Swarm — Agents Thinking (one at a time)")
         progress_bar = st.progress(0)
@@ -95,20 +103,23 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
         st.success(f"✅ All {num_agents} agents × {num_rounds} rounds completed!")
 
-    # RIGHT COLUMN - Scrollable previews with expanders
+    # RIGHT COLUMN - Fixed height + vertical scroll bars
     with col_right:
         st.subheader("📄 Final Preview & Downloads")
 
         client = OpenAI()
         synthesis_prompt = f"""
-        You are the Master Synthesizer.
-        Full swarm input: {''.join(all_contributions[:30])}
+        You are the Master Synthesizer. The user asked for a very long, detailed document.
+        Full swarm input: {''.join(all_contributions[:40])}
         User request: {prompt}
-        Produce:
-        1. Brief summary
-        2. Complete Python code in ```python block
-        3. Full professional LaTeX document starting with \\documentclass
+
+        Produce a PROFESSIONAL, VERY LONG and DETAILED output (aim for thousands of words / many pages when asked for a long paper):
+        1. Brief executive summary
+        2. Complete ready-to-run Python code in ```python block (if relevant)
+        3. FULL professional LaTeX document starting with \\documentclass{{article}} and containing many detailed sections, explanations, equations, and content.
+        Make the LaTeX as long and complete as possible — expand every section with real content.
         """
+
         final_response = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": synthesis_prompt}],
@@ -117,38 +128,39 @@ if prompt := st.chat_input("Ask the swarm anything..."):
         )
         final_text = final_response.choices[0].message.content
 
-        # Python - scrollable expander
-        with st.expander("🐍 Python Code", expanded=True):
-            if "```python" in final_text:
-                code_start = final_text.find("```python") + 9
-                code_end = final_text.find("```", code_start)
-                python_code = final_text[code_start:code_end].strip()
-                st.code(python_code, language="python")
-                st.download_button("📥 Download Python (.py)", python_code, "agent_code.py")
-            else:
-                st.info("No Python code generated.")
+        # Python - fixed scrollable box
+        st.markdown("**🐍 Python Code**")
+        if "```python" in final_text:
+            code_start = final_text.find("```python") + 9
+            code_end = final_text.find("```", code_start)
+            python_code = final_text[code_start:code_end].strip()
+            st.markdown(f'<div class="preview-box">{st.code(python_code, language="python")}</div>', unsafe_allow_html=True)
+            st.download_button("📥 Download Python (.py)", python_code, "agent_code.py")
+        else:
+            st.info("No Python code generated.")
 
-        # LaTeX - scrollable expander
-        with st.expander("📜 LaTeX Document", expanded=True):
-            if "\\documentclass" in final_text:
-                latex_start = final_text.find("\\documentclass")
-                latex_code = final_text[latex_start:].strip()
-                st.code(latex_code[:3000] + "\n... (full document)", language="latex")
-                st.download_button("📥 Download LaTeX (.tex)", latex_code, "agent_paper.tex")
-                st.latex(latex_code[:800] + "\n..." if len(latex_code) > 800 else latex_code)
-            else:
-                st.info("No LaTeX document generated.")
+        # LaTeX - fixed scrollable box
+        st.markdown("**📜 LaTeX Document**")
+        if "\\documentclass" in final_text:
+            latex_start = final_text.find("\\documentclass")
+            latex_code = final_text[latex_start:].strip()
+            st.markdown(f'<div class="preview-box">{st.code(latex_code[:5000] + "\\n... (scroll for full document)", language="latex")}</div>', unsafe_allow_html=True)
+            st.download_button("📥 Download LaTeX (.tex)", latex_code, "agent_paper.tex")
+            st.latex(latex_code[:800] + "\n..." if len(latex_code) > 800 else latex_code)
+        else:
+            st.info("No LaTeX document generated.")
 
-        # Word - scrollable expander
-        with st.expander("📝 Word Document", expanded=True):
-            doc = Document()
-            doc.add_heading("1000 AI Agents Output", 0)
-            doc.add_paragraph(final_text[:4000])
-            bio = BytesIO()
-            doc.save(bio)
-            st.download_button("📥 Download Word (.docx)", bio.getvalue(), "agent_document.docx",
-                              "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        # Word - fixed scrollable box
+        st.markdown("**📝 Word Document**")
+        doc = Document()
+        doc.add_heading("1000 AI Agents Output", 0)
+        doc.add_paragraph(final_text[:6000])
+        bio = BytesIO()
+        doc.save(bio)
+        st.markdown(f'<div class="preview-box">Word preview generated ({len(final_text)} characters). Use the download button.</div>', unsafe_allow_html=True)
+        st.download_button("📥 Download Word (.docx)", bio.getvalue(), "agent_document.docx",
+                          "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
     st.session_state.messages.append({"role": "assistant", "content": f"**{num_agents} AI Agents × {num_rounds} rounds completed** — see right column"})
 
-st.caption("💡 Each preview now has its own scroll bar inside an expander. Right column stays visible.")
+st.caption("💡 Right panels are now fixed size with vertical scroll bars. Try asking for a 50-page paper again.")
