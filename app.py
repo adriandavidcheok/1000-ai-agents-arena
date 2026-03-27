@@ -22,7 +22,7 @@ if "current_prompt" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive LaTeX Builder")
-    st.markdown("**Version 25.0 - Faster AI Army (120 agents)**")
+    st.markdown("**Version 26.0 - Faster AI Army**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -61,7 +61,7 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
         def get_agent_response(i, round_num):
             persona = random.choice(PERSONAS)
-            agent_id = f"Agent #{i+1}"
+            agent_id = f"Agent #{random.randint(1,9999)}"   # random ID for chaotic feel
             last_messages = "\n".join(conversation_history[-10:]) if conversation_history else "No previous messages."
             try:
                 response = client.chat.completions.create(
@@ -79,16 +79,18 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
         for round_num in range(1, num_rounds + 1):
             st.write(f"**Round {round_num} of {num_rounds}**")
-            for i in range(num_agents):
-                thinking, contribution, header = get_agent_response(i, round_num)
-                conversation_history.append(f"{header}: {contribution}")
-                if len(conversation_history) > 15:
-                    conversation_history.pop(0)
-                with army_container:
-                    st.markdown(f"• {header} thinks: {thinking}")
-                with open(tex_filename, "a") as f:
-                    f.write("\n\n" + contribution)
-                time.sleep(0.03)   # very fast now
+            with concurrent.futures.ThreadPoolExecutor(max_workers=80) as executor:
+                futures = [executor.submit(get_agent_response, i, round_num) for i in range(num_agents)]
+                for future in concurrent.futures.as_completed(futures):
+                    thinking, contribution, header = future.result()
+                    conversation_history.append(f"{header}: {contribution}")
+                    if len(conversation_history) > 15:
+                        conversation_history.pop(0)
+                    with army_container:
+                        st.markdown(f"• {header} thinks: {thinking}")
+                    with open(tex_filename, "a") as f:
+                        f.write("\n\n" + contribution)
+                    time.sleep(0.02)   # very fast now
 
         st.success(f"✅ AI Army conversation finished!")
 
