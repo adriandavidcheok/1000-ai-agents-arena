@@ -9,15 +9,15 @@ from io import BytesIO
 
 st.set_page_config(page_title="1000 AI Agents Arena", layout="wide")
 
-# Custom CSS - makes the Current Task banner STICKY at the very top
+# Sticky header CSS
 st.markdown("""
 <style>
-    .sticky-header {
+    .sticky {
         position: sticky;
         top: 0;
-        z-index: 1000;
+        z-index: 999;
         background-color: #0E1117;
-        padding: 10px 0;
+        padding: 15px 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -28,12 +28,12 @@ if "messages" not in st.session_state:
 if "current_prompt" not in st.session_state:
     st.session_state.current_prompt = None
 
-# ====================== STICKY TOP BANNER ======================
+# ====================== STICKY TOP BANNER (ALWAYS VISIBLE) ======================
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Code + LaTeX + Word")
     if st.session_state.current_prompt:
-        st.success(f"**Current Task (always visible at top):** {st.session_state.current_prompt}")
+        st.success(f"**Current Task (always at top):** {st.session_state.current_prompt}")
 
 # ====================== SIDEBAR ======================
 with st.sidebar:
@@ -59,11 +59,11 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # ====================== TWO-COLUMN LAYOUT ======================
-    left_col, right_col = st.columns([2, 1])
+    # ====================== TWO-COLUMN LAYOUT (OUTSIDE CHAT BUBBLE) ======================
+    col1, col2 = st.columns([2, 1])
 
     # LEFT COLUMN - Live Swarm
-    with left_col:
+    with col1:
         st.subheader("🔥 Live Swarm — Agents Thinking")
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -83,7 +83,7 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
                     max_tokens=400
                 )
                 reply = response.choices[0].message.content.strip()
-                thinking = reply.split("Contribution:")[0].replace("Thinking:", "").strip() if "Contribution:" in reply else reply[:100]
+                thinking = reply.split("Contribution:")[0].replace("Thinking:", "").strip() if "Contribution:" in reply else reply[:120]
                 contribution = reply.split("Contribution:")[1].strip() if "Contribution:" in reply else reply
                 return thinking, contribution, f"**{agent_id} — {persona}**"
             except Exception:
@@ -106,16 +106,17 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
         st.success(f"✅ All {num_agents} agents contributed!")
 
     # RIGHT COLUMN - Three Preview Windows
-    with right_col:
+    with col2:
         st.subheader("📄 Final Preview & Downloads")
         client = OpenAI()
 
         synthesis_prompt = f"""
-        You are the Master Synthesizer. Full swarm input: {''.join(all_contributions[:50])}
+        You are the Master Synthesizer.
+        Full swarm input: {''.join(all_contributions[:30])}
         User request: {prompt}
         Produce:
         1. Brief summary
-        2. Complete ready-to-run Python code in ```python block
+        2. Complete Python code in ```python block
         3. Full professional LaTeX document starting with \\documentclass
         """
         final_response = client.chat.completions.create(
@@ -135,18 +136,18 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
             st.code(python_code, language="python")
             st.download_button("📥 Download Python (.py)", python_code, "agent_code.py")
         else:
-            st.info("No Python code generated this time.")
+            st.info("No Python code generated.")
 
         # LaTeX Preview
         st.markdown("**📜 LaTeX Document**")
         if "\\documentclass" in final_text:
             latex_start = final_text.find("\\documentclass")
             latex_code = final_text[latex_start:].strip()
-            st.code(latex_code[:1500] + "\n... (full document)", language="latex")
+            st.code(latex_code[:1400] + "\n... (full document)", language="latex")
             st.download_button("📥 Download LaTeX (.tex)", latex_code, "agent_paper.tex")
-            st.latex(latex_code[:800] + "\n..." if len(latex_code) > 800 else latex_code)
+            st.latex(latex_code[:700] + "\n..." if len(latex_code) > 700 else latex_code)
         else:
-            st.info("No LaTeX document generated this time.")
+            st.info("No LaTeX document generated.")
 
         # Word Preview
         st.markdown("**📝 Word Document**")
@@ -159,6 +160,6 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
                           "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
     # Save to history
-    st.session_state.messages.append({"role": "assistant", "content": f"**{num_agents} AI Agents Swarm completed** — see right column"})
+    st.session_state.messages.append({"role": "assistant", "content": f"**{num_agents} AI Agents Swarm completed** — see right column for previews & downloads"})
 
-st.caption("💡 Refresh the page to start a new task. Your public link is ready for the press release!")
+st.caption("💡 Refresh page to start fresh. Public link ready for press release!")
