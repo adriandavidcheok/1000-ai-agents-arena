@@ -8,6 +8,7 @@ from io import BytesIO
 
 st.set_page_config(page_title="1000 AI Agents Arena", layout="wide")
 
+# CSS for fixed scrollable LaTeX box
 st.markdown("""
 <style>
     .latex-box {
@@ -28,25 +29,23 @@ if "messages" not in st.session_state:
 if "current_prompt" not in st.session_state:
     st.session_state.current_prompt = None
 
-# ====================== STICKY TOP BANNER ======================
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive LaTeX Builder")
-    st.markdown("**Version 20.0 - Real File Incremental Builder**")
+    st.markdown("**Version 21.0 - Fixed Scrollable LaTeX + Anti-Repetition**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
-# Sidebar
 with st.sidebar:
     st.header("⚙️ Settings")
     api_key = st.text_input("OpenAI API Key", type="password", value=os.getenv("OPENAI_API_KEY", ""))
     if api_key:
         os.environ["OPENAI_API_KEY"] = api_key
     model = st.selectbox("Latest Model", ["gpt-4o", "gpt-4o-mini", "o1-preview"], index=0)
-    num_agents = st.slider("Number of AI Agents", 100, 1000, 300, step=50)
-    num_rounds = st.slider("Additional Writing Rounds", 2, 8, 5)
+    num_agents = st.slider("Number of AI Agents", 100, 1000, 400, step=50)
+    num_rounds = st.slider("Collaboration Rounds", 3, 8, 5)
 
-PERSONAS = ["LaTeX Architect", "Scientific Writer", "Math LaTeX Specialist", "Document Engineer", "Research Coder"] * 60
+PERSONAS = ["LaTeX Architect", "Scientific Writer", "Math LaTeX Specialist", "Document Engineer", "Research Coder"] * 80
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
@@ -58,26 +57,27 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Create real .tex file
     tex_filename = "massive_paper.tex"
     with open(tex_filename, "w") as f:
-        f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{" + prompt + r"}\maketitle\begin{abstract}This document is being built incrementally by 1000 AI agents.\end{abstract}")
+        f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{" + prompt + r"}\maketitle\begin{abstract}This document is being built incrementally by the AI Army.\end{abstract}")
 
     col_left, col_right = st.columns([2, 1])
 
     with col_left:
-        st.subheader("🔥 Live Swarm — Agents Thinking (one at a time)")
-        progress_bar = st.progress(0)
-        status_text = st.empty()
+        st.subheader("🔥 AI Army Conversation (many agents talking)")
+        army_container = st.container(height=650)
         client = OpenAI()
+        all_contributions = []
 
         def get_agent_response(i, round_num):
             persona = random.choice(PERSONAS)
             agent_id = f"Agent #{i+1} (Round {round_num})"
+            with open(tex_filename, "r") as f:
+                current_latex = f.read()[-4000:]
             try:
                 response = client.chat.completions.create(
                     model=model,
-                    messages=[{"role": "system", "content": f"You are {persona} building a massive LaTeX document. Current LaTeX file exists on disk. User request: {prompt}. Respond EXACTLY in this format:\nThinking: [one short sentence]\nContribution: [full LaTeX code for the next chapter/section/paragraph]"}],
+                    messages=[{"role": "system", "content": f"You are {persona} in the AI Army. NEVER repeat any concept, section, or idea that has already been written. Current LaTeX: {current_latex}. Previous contributions: {''.join(all_contributions[-6:])}. User request: {prompt}. Respond EXACTLY in this format:\nThinking: [one short sentence]\nContribution: [new, unique LaTeX code for the next section/paragraph ONLY]"}],
                     temperature=0.85,
                     max_tokens=700
                 )
@@ -92,23 +92,21 @@ if prompt := st.chat_input("Ask the swarm anything..."):
             st.write(f"**Round {round_num} of {num_rounds}**")
             batch_size = 50
             for batch_start in range(0, num_agents, batch_size):
-                status_text.text(f"🚀 Round {round_num} — Launching batch {batch_start//batch_size + 1}...")
                 with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
                     futures = [executor.submit(get_agent_response, i, round_num) for i in range(batch_start, batch_start + 50)]
                     for idx, future in enumerate(concurrent.futures.as_completed(futures)):
                         thinking, contribution, header = future.result()
-                        # Append to real file
+                        all_contributions.append(contribution)
                         with open(tex_filename, "a") as f:
                             f.write("\n\n" + contribution)
-                        status_text.text(f"🧠 {header} thinks: {thinking}")
-                        progress_bar.progress(((round_num-1)*num_agents + batch_start + idx + 1) / (num_rounds * num_agents))
-                        time.sleep(0.08)
+                        with army_container:
+                            st.markdown(f"• {header} thinks: {thinking}")
+                        time.sleep(0.06)
 
-        st.success(f"✅ Massive LaTeX file built incrementally!")
+        st.success(f"✅ AI Army of {num_agents} agents × {num_rounds} rounds completed!")
 
-    # RIGHT COLUMN - Fixed scrollable box showing the real file content
     with col_right:
-        st.subheader("📜 Massive LaTeX Document (scrollable)")
+        st.subheader("📜 Massive LaTeX Document (fixed scrollable box)")
 
         with open(tex_filename, "r") as f:
             final_latex = f.read()
@@ -116,6 +114,6 @@ if prompt := st.chat_input("Ask the swarm anything..."):
         st.markdown('<div class="latex-box">' + st.code(final_latex, language="latex") + '</div>', unsafe_allow_html=True)
         st.download_button("📥 Download Full LaTeX (.tex)", final_latex, "massive_paper.tex")
 
-    st.session_state.messages.append({"role": "assistant", "content": f"**Massive LaTeX document built incrementally on disk**"})
+    st.session_state.messages.append({"role": "assistant", "content": f"**AI Army completed — massive LaTeX built on disk**"})
 
-st.caption("💡 LaTeX is now built by appending to a real .tex file chapter/section/paragraph by paragraph. Right box has its own vertical scroll bar.")
+st.caption("💡 Right LaTeX box is fixed height with its own vertical scroll bar. Download button is always visible.")
