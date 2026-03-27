@@ -9,15 +9,14 @@ from io import BytesIO
 
 st.set_page_config(page_title="1000 AI Agents Arena", layout="wide")
 
-# CSS: sticky right column + sticky top banner
+# Sticky right column + top banner
 st.markdown("""
 <style>
     .sticky-header { position: sticky; top: 0; z-index: 1000; background-color: #0E1117; padding: 10px 0; border-bottom: 1px solid #262730; }
-    .sticky-right { position: sticky; top: 80px; z-index: 999; align-self: start; }
+    .sticky-right { position: sticky; top: 120px; z-index: 999; align-self: start; }
 </style>
 """, unsafe_allow_html=True)
 
-# Session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "current_prompt" not in st.session_state:
@@ -27,11 +26,11 @@ if "current_prompt" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Code + LaTeX + Word")
-    st.markdown("**Version 13.0 - Sticky Right Column**")
+    st.markdown("**Version 14.0 - Single Agent Live Overwrite**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
-# ====================== SIDEBAR ======================
+# Sidebar
 with st.sidebar:
     st.header("⚙️ Settings")
     api_key = st.text_input("OpenAI API Key", type="password", value=os.getenv("OPENAI_API_KEY", ""))
@@ -46,22 +45,19 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simulator in Python and write the full LaTeX paper + Word version')"):
+if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.current_prompt = prompt
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # ====================== TWO-COLUMN LAYOUT ======================
     col_left, col_right = st.columns([2, 1])
 
-    # LEFT COLUMN - Swarm (can scroll)
+    # LEFT COLUMN - SINGLE AGENT OVERWRITE (no scrolling)
     with col_left:
         st.subheader("🔥 Live Swarm — Agents Thinking")
         progress_bar = st.progress(0)
-        status_text = st.empty()
-        thoughts_container = st.expander("📢 What each agent is thinking (live)", expanded=True)
-
+        status_text = st.empty()          # ← this line gets overwritten
         client = OpenAI()
         all_contributions = []
 
@@ -91,72 +87,66 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
                 for idx, future in enumerate(concurrent.futures.as_completed(futures)):
                     thinking, contribution, header = future.result()
                     all_contributions.append(contribution)
-                    with thoughts_container:
-                        st.markdown(f"• {header} thinks: {thinking}")
+                    
+                    # OVERWRITE the same line with the latest agent
+                    status_text.text(f"🧠 {header} thinks: {thinking}")
+                    
                     progress_bar.progress((batch_start + idx + 1) / num_agents)
-                    time.sleep(0.02)
+                    time.sleep(0.08)   # nice visible animation
 
         st.success(f"✅ All {num_agents} agents contributed!")
 
-    # RIGHT COLUMN - Sticky previews
+    # RIGHT COLUMN - always visible
     with col_right:
         st.subheader("📄 Final Preview & Downloads")
-        st.write("✅ RIGHT COLUMN IS EXECUTING")   # debug
+        client = OpenAI()
 
-        try:
-            client = OpenAI()
-            synthesis_prompt = f"""
-            You are the Master Synthesizer.
-            Full swarm input: {''.join(all_contributions[:30])}
-            User request: {prompt}
-            Produce:
-            1. Brief summary
-            2. Complete Python code in ```python block
-            3. Full professional LaTeX document starting with \\documentclass
-            """
-            final_response = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": synthesis_prompt}],
-                temperature=0.7,
-                max_tokens=4000
-            )
-            final_text = final_response.choices[0].message.content
+        synthesis_prompt = f"""
+        You are the Master Synthesizer.
+        Full swarm input: {''.join(all_contributions[:30])}
+        User request: {prompt}
+        Produce:
+        1. Brief summary
+        2. Complete Python code in ```python block
+        3. Full professional LaTeX document starting with \\documentclass
+        """
+        final_response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": synthesis_prompt}],
+            temperature=0.7,
+            max_tokens=4000
+        )
+        final_text = final_response.choices[0].message.content
 
-            # Python
-            st.markdown("**🐍 Python Code**")
-            if "```python" in final_text:
-                code_start = final_text.find("```python") + 9
-                code_end = final_text.find("```", code_start)
-                python_code = final_text[code_start:code_end].strip()
-                st.code(python_code, language="python")
-                st.download_button("📥 Download Python (.py)", python_code, "agent_code.py")
-            else:
-                st.info("No Python code generated.")
+        st.markdown("**🐍 Python Code**")
+        if "```python" in final_text:
+            code_start = final_text.find("```python") + 9
+            code_end = final_text.find("```", code_start)
+            python_code = final_text[code_start:code_end].strip()
+            st.code(python_code, language="python")
+            st.download_button("📥 Download Python (.py)", python_code, "agent_code.py")
+        else:
+            st.info("No Python code generated.")
 
-            # LaTeX
-            st.markdown("**📜 LaTeX Document**")
-            if "\\documentclass" in final_text:
-                latex_start = final_text.find("\\documentclass")
-                latex_code = final_text[latex_start:].strip()
-                st.code(latex_code[:1400] + "\n... (full document)", language="latex")
-                st.download_button("📥 Download LaTeX (.tex)", latex_code, "agent_paper.tex")
-                st.latex(latex_code[:700] + "\n..." if len(latex_code) > 700 else latex_code)
-            else:
-                st.info("No LaTeX document generated.")
+        st.markdown("**📜 LaTeX Document**")
+        if "\\documentclass" in final_text:
+            latex_start = final_text.find("\\documentclass")
+            latex_code = final_text[latex_start:].strip()
+            st.code(latex_code[:1400] + "\n... (full document)", language="latex")
+            st.download_button("📥 Download LaTeX (.tex)", latex_code, "agent_paper.tex")
+            st.latex(latex_code[:700] + "\n..." if len(latex_code) > 700 else latex_code)
+        else:
+            st.info("No LaTeX document generated.")
 
-            # Word
-            st.markdown("**📝 Word Document**")
-            doc = Document()
-            doc.add_heading("1000 AI Agents Output", 0)
-            doc.add_paragraph(final_text[:2500])
-            bio = BytesIO()
-            doc.save(bio)
-            st.download_button("📥 Download Word (.docx)", bio.getvalue(), "agent_document.docx",
-                              "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-
-        except Exception as e:
-            st.error(f"Error: {str(e)[:150]}")
+        st.markdown("**📝 Word Document**")
+        doc = Document()
+        doc.add_heading("1000 AI Agents Output", 0)
+        doc.add_paragraph(final_text[:2500])
+        bio = BytesIO()
+        doc.save(bio)
+        st.download_button("📥 Download Word (.docx)", bio.getvalue(), "agent_document.docx",
+                          "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
     st.session_state.messages.append({"role": "assistant", "content": f"**{num_agents} AI Agents Swarm completed** — see right column"})
 
-st.caption("💡 The right column should now stay visible even when the left side scrolls.")
+st.caption("💡 Only one agent shows at a time → no scrolling. Right column stays visible.")
