@@ -14,8 +14,10 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "current_prompt" not in st.session_state:
     st.session_state.current_prompt = None
+if "final_text" not in st.session_state:
+    st.session_state.final_text = None
 
-# ====================== PERSISTENT TOP HEADER ======================
+# ====================== PERSISTENT TOP BANNER ======================
 st.title("🌀 1000 AI Agents Arena")
 st.caption("Live in your browser • Shareable link • Code + LaTeX + Word • Ready for press release!")
 
@@ -51,7 +53,6 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
     with st.chat_message("assistant"):
         client = OpenAI()
         
-        # Live swarm section
         st.subheader("🔥 Live Swarm — 1000 Agents Thinking")
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -112,10 +113,7 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
 
         st.success(f"✅ All {num_agents} agents contributed!")
 
-        # ====================== FINAL PREVIEW (TABS — more reliable) ======================
-        st.subheader("📄 Final Preview & Downloads")
-        tab1, tab2, tab3 = st.tabs(["🐍 Python Code", "📜 LaTeX Document", "📝 Word Document"])
-
+        # ====================== FINAL SYNTHESIS (saved to session_state) ======================
         synthesis_prompt = f"""
         You are the Master Synthesizer.
         Full swarm input: {''.join(all_contributions)}
@@ -133,41 +131,43 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
             temperature=0.7,
             max_tokens=4000
         )
-        final_text = final_response.choices[0].message.content
-
-        # Python tab
-        with tab1:
-            if "```python" in final_text:
-                code_start = final_text.find("```python") + 9
-                code_end = final_text.find("```", code_start)
-                python_code = final_text[code_start:code_end].strip()
-                st.code(python_code, language="python")
-                st.download_button("📥 Download Python (.py)", python_code, "agent_code.py")
-            else:
-                st.info("No Python code generated this time.")
-
-        # LaTeX tab
-        with tab2:
-            if "\\documentclass" in final_text:
-                latex_start = final_text.find("\\documentclass")
-                latex_code = final_text[latex_start:].strip()
-                st.code(latex_code[:1500] + "\n... (full document)", language="latex")
-                st.download_button("📥 Download LaTeX (.tex)", latex_code, "agent_paper.tex")
-                st.latex(latex_code[:800] + "\n..." if len(latex_code) > 800 else latex_code)
-            else:
-                st.info("No LaTeX document generated this time.")
-
-        # Word tab
-        with tab3:
-            doc = Document()
-            doc.add_heading("1000 AI Agents Output", 0)
-            doc.add_paragraph(final_text[:3000])
-            bio = BytesIO()
-            doc.save(bio)
-            st.download_button("📥 Download Word (.docx)", bio.getvalue(), "agent_document.docx",
-                              "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        st.session_state.final_text = final_response.choices[0].message.content
 
     # Save summary to history
-    st.session_state.messages.append({"role": "assistant", "content": f"**{num_agents} AI Agents Swarm completed!** (see tabs above for full output)"})
+    st.session_state.messages.append({"role": "assistant", "content": f"**{num_agents} AI Agents Swarm completed!** (see Final Preview below)"})
 
-st.caption("💡 Your public link is ready for the press release! Refresh the page to start fresh.")
+# ====================== FINAL PREVIEW (ALWAYS VISIBLE, OUTSIDE CHAT) ======================
+if st.session_state.final_text:
+    st.subheader("📄 Final Preview & Downloads")
+    tab1, tab2, tab3 = st.tabs(["🐍 Python Code", "📜 LaTeX Document", "📝 Word Document"])
+
+    with tab1:
+        if "```python" in st.session_state.final_text:
+            code_start = st.session_state.final_text.find("```python") + 9
+            code_end = st.session_state.final_text.find("```", code_start)
+            python_code = st.session_state.final_text[code_start:code_end].strip()
+            st.code(python_code, language="python")
+            st.download_button("📥 Download Python (.py)", python_code, "agent_code.py", key="py_btn")
+        else:
+            st.info("No Python code generated this time.")
+
+    with tab2:
+        if "\\documentclass" in st.session_state.final_text:
+            latex_start = st.session_state.final_text.find("\\documentclass")
+            latex_code = st.session_state.final_text[latex_start:].strip()
+            st.code(latex_code[:1500] + "\n... (full document)", language="latex")
+            st.download_button("📥 Download LaTeX (.tex)", latex_code, "agent_paper.tex", key="tex_btn")
+            st.latex(latex_code[:800] + "\n..." if len(latex_code) > 800 else latex_code)
+        else:
+            st.info("No LaTeX document generated this time.")
+
+    with tab3:
+        doc = Document()
+        doc.add_heading("1000 AI Agents Output", 0)
+        doc.add_paragraph(st.session_state.final_text[:3000])
+        bio = BytesIO()
+        doc.save(bio)
+        st.download_button("📥 Download Word (.docx)", bio.getvalue(), "agent_document.docx",
+                          "application/vnd.openxmlformats-officedocument.wordprocessingml.document", key="docx_btn")
+
+st.caption("💡 Refresh the page to start fresh. Your public link is ready for the press release!")
