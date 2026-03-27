@@ -10,8 +10,8 @@ st.set_page_config(page_title="1000 AI Agents Arena", layout="wide")
 st.markdown("""
 <style>
     .army-box { 
-        max-height: 580px; 
-        overflow-y: auto; 
+        max-height: 220px; 
+        overflow-y: hidden; 
         border: 1px solid #262730; 
         padding: 12px; 
         border-radius: 8px; 
@@ -38,7 +38,7 @@ if "current_prompt" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive LaTeX Builder")
-    st.markdown("**Version 26.2 - Auto-Scrolling AI Army**")
+    st.markdown("**Version 27.0 - Only 3 Agents Visible**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -48,7 +48,7 @@ with st.sidebar:
     if api_key:
         os.environ["OPENAI_API_KEY"] = api_key
     model = st.selectbox("Latest Model", ["gpt-4o-mini", "gpt-4o", "o1-preview"], index=0)
-    num_agents = st.slider("Number of AI Agents", 50, 1000, 120, step=50)
+    num_agents = st.slider("Number of AI Agents", 50, 1000, 150, step=50)
     num_rounds = st.slider("Conversation Rounds", 3, 10, 5)
 
 PERSONAS = ["LaTeX Architect", "Scientific Writer", "Math LaTeX Specialist", "Document Engineer", "Research Coder", "Critic", "Optimist", "Devil's Advocate"] * 60
@@ -70,20 +70,18 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     col_left, col_right = st.columns([2, 1])
 
     with col_left:
-        st.subheader("🔥 AI Army Conversation (agents talking to each other)")
-        army_container = st.container(height=580)
-
+        st.subheader("🔥 AI Army Conversation (only latest 3 agents visible)")
+        army_container = st.container(height=220)   # fixed small box
         client = OpenAI()
-        conversation_history = []
+        visible_agents = []   # keeps only the latest 3
 
         def get_agent_response(i, round_num):
             persona = random.choice(PERSONAS)
             agent_id = f"Agent #{random.randint(1,9999)}"
-            last_messages = "\n".join(conversation_history[-10:]) if conversation_history else "No previous messages."
             try:
                 response = client.chat.completions.create(
                     model=model,
-                    messages=[{"role": "system", "content": f"You are {persona} in a live AI Army discussion. Previous messages: {last_messages}. User request: {prompt}. Respond EXACTLY in this format:\nThinking: [one short sentence]\nContribution: [your reply or new LaTeX section]"}],
+                    messages=[{"role": "system", "content": f"You are {persona} in a live AI Army. User request: {prompt}. Respond EXACTLY in this format:\nThinking: [one short sentence]\nContribution: [your reply or new LaTeX section]"}],
                     temperature=0.9,
                     max_tokens=700
                 )
@@ -98,21 +96,17 @@ if prompt := st.chat_input("Ask the swarm anything..."):
             st.write(f"**Round {round_num} of {num_rounds}**")
             for i in range(num_agents):
                 thinking, contribution, header = get_agent_response(i, round_num)
-                conversation_history.append(f"{header}: {contribution}")
-                if len(conversation_history) > 15:
-                    conversation_history.pop(0)
-                
-                # Display the new message
+                visible_agents.append(f"• {header} thinks: {thinking}")
+                if len(visible_agents) > 3:
+                    visible_agents.pop(0)   # remove oldest
+
                 with army_container:
-                    st.markdown(f"• {header} thinks: {thinking}")
-                
-                # Force auto-scroll to bottom
-                st.markdown('<script>var objDiv = document.querySelector(".army-box"); if(objDiv) objDiv.scrollTop = objDiv.scrollHeight;</script>', unsafe_allow_html=True)
+                    st.markdown("\n".join(visible_agents))
                 
                 with open(tex_filename, "a") as f:
                     f.write("\n\n" + contribution)
                 
-                time.sleep(0.03)   # fast but visible
+                time.sleep(0.04)   # fast but visible
 
         st.success(f"✅ AI Army conversation finished!")
 
@@ -125,4 +119,4 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
     st.session_state.messages.append({"role": "assistant", "content": f"**AI Army conversation completed**"})
 
-st.caption("💡 Left conversation now auto-scrolls to the latest messages. Right LaTeX box has its own vertical scroll bar.")
+st.caption("💡 Left box now shows only the latest 3 agents. Right LaTeX box is fixed with its own scroll bar.")
