@@ -26,7 +26,7 @@ if "current_prompt" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Code + LaTeX + Word")
-    st.markdown("**Version 9.0 - Stable Two-Column Full Swarm**")   # ← YOU SHOULD SEE THIS
+    st.markdown("**Version 10.0 - Stable Two-Column Full Swarm**")   # ← YOU SHOULD SEE THIS
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -54,7 +54,7 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # ====================== TWO-COLUMN LAYOUT (PROVEN WORKING STRUCTURE) ======================
+    # ====================== TWO-COLUMN LAYOUT ======================
     col_left, col_right = st.columns([2, 1])
 
     # LEFT COLUMN - Live Swarm
@@ -154,7 +154,6 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
         st.download_button("📥 Download Word (.docx)", bio.getvalue(), "agent_document.docx",
                           "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
-    # Save to history
     st.session_state.messages.append({"role": "assistant", "content": f"**{num_agents} AI Agents Swarm completed** — see right column"})
 
 st.caption("💡 Refresh the page to start fresh. Public link ready for press release!")
