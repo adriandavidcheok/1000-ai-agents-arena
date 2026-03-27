@@ -12,13 +12,7 @@ st.set_page_config(page_title="1000 AI Agents Arena", layout="wide")
 # Sticky header CSS
 st.markdown("""
 <style>
-    .sticky {
-        position: sticky;
-        top: 0;
-        z-index: 999;
-        background-color: #0E1117;
-        padding: 15px 0;
-    }
+    .sticky-header { position: sticky; top: 0; z-index: 1000; background-color: #0E1117; padding: 10px 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -28,12 +22,13 @@ if "messages" not in st.session_state:
 if "current_prompt" not in st.session_state:
     st.session_state.current_prompt = None
 
-# ====================== STICKY TOP BANNER (ALWAYS VISIBLE) ======================
+# ====================== STICKY TOP BANNER WITH VERSION ======================
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Code + LaTeX + Word")
+    st.markdown("**Version 6.0 - Two Column Fixed**")   # ← YOU WILL SEE THIS IF NEW CODE IS RUNNING
     if st.session_state.current_prompt:
-        st.success(f"**Current Task (always at top):** {st.session_state.current_prompt}")
+        st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
 # ====================== SIDEBAR ======================
 with st.sidebar:
@@ -59,11 +54,11 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # ====================== TWO-COLUMN LAYOUT (OUTSIDE CHAT BUBBLE) ======================
-    col1, col2 = st.columns([2, 1])
+    # ====================== TWO-COLUMN LAYOUT (MAIN PAGE) ======================
+    col_left, col_right = st.columns([2, 1])
 
     # LEFT COLUMN - Live Swarm
-    with col1:
+    with col_left:
         st.subheader("🔥 Live Swarm — Agents Thinking")
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -106,7 +101,7 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
         st.success(f"✅ All {num_agents} agents contributed!")
 
     # RIGHT COLUMN - Three Preview Windows
-    with col2:
+    with col_right:
         st.subheader("📄 Final Preview & Downloads")
         client = OpenAI()
 
@@ -127,7 +122,7 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
         )
         final_text = final_response.choices[0].message.content
 
-        # Python Preview
+        # Python
         st.markdown("**🐍 Python Code**")
         if "```python" in final_text:
             code_start = final_text.find("```python") + 9
@@ -138,7 +133,7 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
         else:
             st.info("No Python code generated.")
 
-        # LaTeX Preview
+        # LaTeX
         st.markdown("**📜 LaTeX Document**")
         if "\\documentclass" in final_text:
             latex_start = final_text.find("\\documentclass")
@@ -149,7 +144,7 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
         else:
             st.info("No LaTeX document generated.")
 
-        # Word Preview
+        # Word
         st.markdown("**📝 Word Document**")
         doc = Document()
         doc.add_heading("1000 AI Agents Output", 0)
@@ -162,4 +157,4 @@ if prompt := st.chat_input("Ask the swarm anything (e.g. 'Create a quantum simul
     # Save to history
     st.session_state.messages.append({"role": "assistant", "content": f"**{num_agents} AI Agents Swarm completed** — see right column for previews & downloads"})
 
-st.caption("💡 Refresh page to start fresh. Public link ready for press release!")
+st.caption("💡 Refresh the page to start fresh. Public link ready for press release!")
