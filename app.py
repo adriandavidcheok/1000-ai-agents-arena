@@ -38,7 +38,7 @@ if "current_prompt" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive LaTeX Builder")
-    st.markdown("**Version 27.0 - Only 3 Agents Visible**")
+    st.markdown("**Version 28.0 - Clean 3-Agent Fixed Box**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -71,9 +71,9 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
     with col_left:
         st.subheader("🔥 AI Army Conversation (only latest 3 agents visible)")
-        army_container = st.container(height=220)   # fixed small box
+        army_container = st.container(height=220)
         client = OpenAI()
-        visible_agents = []   # keeps only the latest 3
+        latest_agents = []   # keeps only the latest 3
 
         def get_agent_response(i, round_num):
             persona = random.choice(PERSONAS)
@@ -81,7 +81,7 @@ if prompt := st.chat_input("Ask the swarm anything..."):
             try:
                 response = client.chat.completions.create(
                     model=model,
-                    messages=[{"role": "system", "content": f"You are {persona} in a live AI Army. User request: {prompt}. Respond EXACTLY in this format:\nThinking: [one short sentence]\nContribution: [your reply or new LaTeX section]"}],
+                    messages=[{"role": "system", "content": f"You are {persona} in a live AI Army discussion. User request: {prompt}. Respond EXACTLY in this format:\nThinking: [one short sentence]\nContribution: [your reply or new LaTeX section]"}],
                     temperature=0.9,
                     max_tokens=700
                 )
@@ -96,17 +96,17 @@ if prompt := st.chat_input("Ask the swarm anything..."):
             st.write(f"**Round {round_num} of {num_rounds}**")
             for i in range(num_agents):
                 thinking, contribution, header = get_agent_response(i, round_num)
-                visible_agents.append(f"• {header} thinks: {thinking}")
-                if len(visible_agents) > 3:
-                    visible_agents.pop(0)   # remove oldest
-
+                latest_agents.append(f"• {header} thinks: {thinking}")
+                if len(latest_agents) > 3:
+                    latest_agents.pop(0)   # remove oldest
+                
                 with army_container:
-                    st.markdown("\n".join(visible_agents))
+                    st.markdown("\n".join(latest_agents))
                 
                 with open(tex_filename, "a") as f:
                     f.write("\n\n" + contribution)
                 
-                time.sleep(0.04)   # fast but visible
+                time.sleep(0.04)
 
         st.success(f"✅ AI Army conversation finished!")
 
@@ -119,4 +119,4 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
     st.session_state.messages.append({"role": "assistant", "content": f"**AI Army conversation completed**"})
 
-st.caption("💡 Left box now shows only the latest 3 agents. Right LaTeX box is fixed with its own scroll bar.")
+st.caption("💡 Left box now shows ONLY the latest 3 agents and never scrolls. Right LaTeX box is fixed with its own scroll bar.")
