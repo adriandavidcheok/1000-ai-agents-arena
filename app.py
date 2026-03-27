@@ -9,7 +9,7 @@ st.set_page_config(page_title="1000 AI Agents Arena", layout="wide")
 
 st.markdown("""
 <style>
-    .army-box { max-height: 620px; overflow-y: auto; border: 1px solid #262730; padding: 12px; border-radius: 8px; background-color: #1E2127; }
+    .army-box { max-height: 580px; overflow-y: auto; border: 1px solid #262730; padding: 12px; border-radius: 8px; background-color: #1E2127; }
     .latex-box { max-height: 620px; overflow-y: auto; border: 1px solid #262730; padding: 15px; border-radius: 8px; background-color: #1E2127; font-family: monospace; white-space: pre-wrap; }
 </style>
 """, unsafe_allow_html=True)
@@ -22,7 +22,7 @@ if "current_prompt" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive LaTeX Builder")
-    st.markdown("**Version 22.0 - Real AI Army Conversation**")
+    st.markdown("**Version 23.0 - Fixed Conversation + Scrollable LaTeX**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -49,26 +49,27 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
     tex_filename = "massive_paper.tex"
     with open(tex_filename, "w") as f:
-        f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{" + prompt + r"}\maketitle\begin{abstract}This document is being built by a live AI Army conversation.\end{abstract}")
+        f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{" + prompt + r"}\maketitle\begin{abstract}This massive document is being built live by the AI Army.\end{abstract}")
 
     col_left, col_right = st.columns([2, 1])
 
-    # LEFT COLUMN - Real AI Army Conversation (agents reply to each other)
+    # LEFT COLUMN - Fixed-height AI Army Conversation (only latest messages visible)
     with col_left:
         st.subheader("🔥 AI Army Conversation (agents talking to each other)")
-        army_container = st.container(height=650)
+        army_container = st.container(height=580)   # fixed height, scrolls only inside
         client = OpenAI()
         conversation_history = []
 
-        def get_agent_response(i, round_num, last_message):
+        def get_agent_response(i, round_num):
             persona = random.choice(PERSONAS)
             agent_id = f"Agent #{i+1}"
+            last_messages = "\n".join(conversation_history[-10:]) if conversation_history else "No previous messages."
             try:
                 response = client.chat.completions.create(
                     model=model,
-                    messages=[{"role": "system", "content": f"You are {persona} in a live AI Army conversation. Previous messages: {last_message}. User request: {prompt}. Respond EXACTLY in this format:\nThinking: [one short sentence]\nContribution: [your reply or new LaTeX section]"}],
+                    messages=[{"role": "system", "content": f"You are {persona} in a live AI Army discussion. Previous messages: {last_messages}. User request: {prompt}. Respond EXACTLY in this format:\nThinking: [one short sentence]\nContribution: [your reply or new LaTeX section]"}],
                     temperature=0.9,
-                    max_tokens=600
+                    max_tokens=700
                 )
                 reply = response.choices[0].message.content.strip()
                 thinking = reply.split("Contribution:")[0].replace("Thinking:", "").strip() if "Contribution:" in reply else reply[:120]
@@ -80,18 +81,19 @@ if prompt := st.chat_input("Ask the swarm anything..."):
         for round_num in range(1, num_rounds + 1):
             st.write(f"**Round {round_num} of {num_rounds}**")
             for i in range(num_agents):
-                last_message = "\n".join(conversation_history[-8:]) if conversation_history else "No previous messages yet."
-                thinking, contribution, header = get_agent_response(i, round_num, last_message)
+                thinking, contribution, header = get_agent_response(i, round_num)
                 conversation_history.append(f"{header}: {contribution}")
+                if len(conversation_history) > 12:   # keep only the latest 12 messages
+                    conversation_history.pop(0)
+                with army_container:
+                    st.markdown(f"• {header} thinks: {thinking}")
                 with open(tex_filename, "a") as f:
                     f.write("\n\n" + contribution)
-                with army_container:
-                    st.markdown(f"• {header} thinks: {thinking}\n\n**Contribution:** {contribution[:300]}...")
                 time.sleep(0.12)
 
         st.success(f"✅ AI Army conversation finished!")
 
-    # RIGHT COLUMN - Fixed scrollable LaTeX
+    # RIGHT COLUMN - Fixed scrollable LaTeX box
     with col_right:
         st.subheader("📜 Massive LaTeX Document (fixed scrollable)")
 
@@ -103,4 +105,4 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
     st.session_state.messages.append({"role": "assistant", "content": f"**AI Army conversation completed**"})
 
-st.caption("💡 Left side now shows real agent-to-agent conversation. Right side is fixed-size with vertical scroll bar.")
+st.caption("💡 Left conversation box now shows only the latest messages (fixed height). Right LaTeX box has its own vertical scroll bar.")
