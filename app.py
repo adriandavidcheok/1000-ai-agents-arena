@@ -53,7 +53,7 @@ if "previous_summary" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 53.0 - Full Desktop Functions + One-Line-at-a-Time Preview**")
+    st.markdown("**Version 54.0 - OpenAI Client Fixed + One-Line-at-a-Time Preview**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -71,8 +71,6 @@ with st.sidebar:
 
 PERSONAS = ["LaTeX Architect", "Scientific Writer", "Math LaTeX Specialist", "Document Engineer", "Research Coder", "Critical Reviewer", "Detailed Editor", "Storyteller"] * 60
 
-client = OpenAI()
-
 col_left, col_right = st.columns([3, 2])
 
 with col_left:
@@ -88,7 +86,7 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.previous_summary = ""
     st.rerun()
 
-# Desktop script functions
+# Desktop script functions (same as your original code)
 def to_ascii(text: str) -> str:
     if text is None:
         return ""
@@ -153,6 +151,13 @@ if uploaded_files:
     for file in uploaded_files:
         background_corpus += read_uploaded_file(file) + "\n\n"
     st.sidebar.success(f"Loaded {len(uploaded_files)} background documents")
+
+# Create client ONLY after key is entered
+if not api_key:
+    st.warning("⚠️ Please enter your OpenAI API Key in the sidebar to continue.")
+    st.stop()
+
+client = OpenAI(api_key=api_key)
 
 # STAGE 1: Outline
 if st.session_state.stage == "outline":
