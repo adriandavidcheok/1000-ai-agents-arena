@@ -38,7 +38,7 @@ if "current_prompt" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive LaTeX Builder")
-    st.markdown("**Version 29.0 - Only Latest 3 Agents (fixed box)**")
+    st.markdown("**Version 30.0 - Fast 3-Line Lively Conversation**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -47,7 +47,7 @@ with st.sidebar:
     api_key = st.text_input("OpenAI API Key", type="password", value=os.getenv("OPENAI_API_KEY", ""))
     if api_key:
         os.environ["OPENAI_API_KEY"] = api_key
-    model = st.selectbox("Latest Model", ["gpt-4o-mini", "gpt-4o", "o1-preview"], index=0)
+    model = st.selectbox("Latest Model", ["gpt-4o-mini", "gpt-4o"], index=0)
     num_agents = st.slider("Number of AI Agents", 50, 1000, 150, step=50)
     num_rounds = st.slider("Conversation Rounds", 3, 10, 5)
 
@@ -71,7 +71,7 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
     with col_left:
         st.subheader("🔥 AI Army Conversation (only latest 3 agents visible)")
-        army_placeholder = st.empty()   # single placeholder that we update
+        army_placeholder = st.empty()   # single placeholder we update
         client = OpenAI()
         latest_agents = []   # keeps only the latest 3
 
@@ -100,13 +100,13 @@ if prompt := st.chat_input("Ask the swarm anything..."):
                 if len(latest_agents) > 3:
                     latest_agents.pop(0)   # remove oldest
 
-                # Update the placeholder with exactly the latest 3 agents
-                army_placeholder.markdown("\n".join(latest_agents))
+                # Update the 3-line box instantly
+                army_placeholder.markdown("\n\n".join(latest_agents))
                 
                 with open(tex_filename, "a") as f:
                     f.write("\n\n" + contribution)
                 
-                time.sleep(0.04)
+                time.sleep(0.025)   # very fast moving text
 
         st.success(f"✅ AI Army conversation finished!")
 
@@ -119,4 +119,4 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
     st.session_state.messages.append({"role": "assistant", "content": f"**AI Army conversation completed**"})
 
-st.caption("💡 Left box now shows ONLY the latest 3 agents and never scrolls. Right LaTeX box is fixed with its own scroll bar.")
+st.caption("💡 Left side shows only the latest 3 agents, 1 per line, fast-moving, no scrolling. Right LaTeX box is fixed with its own scroll bar.")
