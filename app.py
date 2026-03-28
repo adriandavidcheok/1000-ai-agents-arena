@@ -27,7 +27,7 @@ if "messages" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 42.0 - Live LaTeX Preview + Constant Activity**")
+    st.markdown("**Version 43.0 - Live LaTeX Preview + Constant Detailed Activity**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -58,7 +58,7 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.stage = "outline"
     st.rerun()
 
-# STAGE 1: Outline with constant lively conversation
+# STAGE 1: Outline with constant detailed activity
 if st.session_state.stage == "outline":
     with col_left:
         st.subheader("🔥 AI Army is creating the book outline (10 chapters × 20 sections)")
@@ -66,7 +66,13 @@ if st.session_state.stage == "outline":
         def get_thought():
             persona = random.choice(PERSONAS)
             agent_id = f"Agent #{random.randint(1,9999)}"
-            ideas = ["Considering chapter structure...", "Planning historical context...", "Thinking about technical depth...", "Ensuring unique content...", "Reviewing flow..."]
+            ideas = [
+                f"Considering the best way to structure Chapter {random.randint(1,10)} with clear logical flow and historical context...",
+                f"Planning to include technical depth and mathematical explanations for Section {random.randint(1,20)}...",
+                f"Thinking about how to make the LaTeX formatting clean, professional and easy to read...",
+                f"Ensuring the content is unique, adds real value and avoids any repetition...",
+                f"Reviewing the overall narrative to keep everything consistent and engaging for the reader..."
+            ]
             return f"• {agent_id} — {persona} thinks: {random.choice(ideas)}"
         for i in range(100):
             thought = get_thought()
@@ -88,9 +94,24 @@ if st.session_state.stage == "outline":
     st.session_state.stage = "approve"
     st.rerun()
 
-# STAGE 2: Approve Outline
+# STAGE 2: Approve Outline (still with lively left side)
 if st.session_state.stage == "approve":
-    st.subheader("Proposed Book Outline")
+    with col_left:
+        st.subheader("🔥 AI Army is waiting for your approval...")
+        latest_agents = []
+        def get_thought():
+            persona = random.choice(PERSONAS)
+            agent_id = f"Agent #{random.randint(1,9999)}"
+            ideas = ["Waiting for user decision...", "Reviewing outline quality...", "Preparing to start writing the full book...", "Thinking about how to make each section detailed..."]
+            return f"• {agent_id} — {persona} thinks: {random.choice(ideas)}"
+        for i in range(50):
+            thought = get_thought()
+            latest_agents.append(thought)
+            if len(latest_agents) > 3:
+                latest_agents.pop(0)
+            army_placeholder.markdown("\n\n".join(latest_agents))
+            time.sleep(0.15)
+    st.subheader("Proposed Book Outline (10 chapters × 20 sections)")
     st.markdown(st.session_state.outline)
     col1, col2 = st.columns(2)
     with col1:
@@ -115,7 +136,7 @@ if st.session_state.stage == "writing":
         f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{" + st.session_state.current_prompt + r"}\maketitle\begin{abstract}This book was written collaboratively by the AI Army.\end{abstract}")
 
     st.session_state.tex_content = ""
-    latest_agents = []   # ← Fixed here (this was causing the NameError)
+    latest_agents = []
 
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -127,7 +148,7 @@ if st.session_state.stage == "writing":
             for j in range(5):
                 persona = random.choice(PERSONAS)
                 agent_id = f"Agent #{random.randint(1,9999)}"
-                thinking = f"• {agent_id} — {persona} thinks: Drafting long detailed content for section {section} of chapter {chapter}..."
+                thinking = f"• {agent_id} — {persona} thinks: Drafting a very long detailed section {section} of chapter {chapter} with historical context, technical depth, mathematical formulas, and examples..."
                 latest_agents.append(thinking)
                 if len(latest_agents) > 3:
                     latest_agents.pop(0)
@@ -137,7 +158,7 @@ if st.session_state.stage == "writing":
                 try:
                     response = client.chat.completions.create(
                         model=model,
-                        messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG detailed section {section} of chapter {chapter} for the book on {st.session_state.current_prompt}. Include history, technical explanations, formulas, examples. Make it 800+ words. Respond with only LaTeX code."}],
+                        messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG, detailed, high-quality section {section} of chapter {chapter} for the book on {st.session_state.current_prompt}. Include history, technical explanations, formulas, examples, and analysis. Make this section at least 800 words long. Respond with only the LaTeX code."}],
                         temperature=0.8,
                         max_tokens=2500
                     )
@@ -149,7 +170,7 @@ if st.session_state.stage == "writing":
                 try:
                     synth = client.chat.completions.create(
                         model=model,
-                        messages=[{"role": "system", "content": f"Combine these 5 drafts into ONE long detailed non-repetitive section. Make it even longer. Output only LaTeX code.\n\n" + "\n\n---\n\n".join(drafts)}],
+                        messages=[{"role": "system", "content": f"Combine these 5 drafts into ONE long, detailed, non-repetitive section. Make it even longer and better. Output only LaTeX code.\n\n" + "\n\n---\n\n".join(drafts)}],
                         temperature=0.7,
                         max_tokens=3500
                     )
