@@ -26,7 +26,7 @@ if "messages" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 32.0 - Exact 6-Step Workflow + Fast 3-Line Army**")
+    st.markdown("**Version 33.0 - Exact 6-Step Workflow + Fast 3-Line Army**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -50,21 +50,20 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.messages = [{"role": "user", "content": prompt}]
     st.session_state.stage = "outline"
 
-# STAGE 1: Generate Outline (fast single call)
+# STAGE 1: Generate Outline
 if st.session_state.stage == "outline":
     st.subheader("🔥 AI Army is creating the book outline (10 chapters × 20 sections)")
     client = OpenAI()
-    with st.spinner("Generating outline..."):
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "system", "content": f"Create a detailed book outline for: {st.session_state.current_prompt}. Exactly 10 chapters, each with exactly 20 sections. Output clean markdown with clear headings."}],
-                temperature=0.8,
-                max_tokens=1600
-            )
-            st.session_state.outline = response.choices[0].message.content.strip()
-        except Exception:
-            st.session_state.outline = "Error generating outline. Please try again."
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": f"Create a detailed book outline for: {st.session_state.current_prompt}. Exactly 10 chapters, each with exactly 20 sections. Output clean markdown with clear headings."}],
+            temperature=0.8,
+            max_tokens=1600
+        )
+        st.session_state.outline = response.choices[0].message.content.strip()
+    except Exception:
+        st.session_state.outline = "Error generating outline. Please try again."
     st.session_state.stage = "approve"
     st.rerun()
 
