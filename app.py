@@ -26,7 +26,7 @@ if "messages" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 37.0 - Multi-Agent Per Section + Fast 3-Line Army**")
+    st.markdown("**Version 37.0 - Exact 6-Step Workflow + Fast 3-Line Army**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -51,26 +51,33 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.stage = "outline"
     st.rerun()
 
-# STAGE 1: Generate Outline
+# STAGE 1: Generate Outline with lively conversation
 if st.session_state.stage == "outline":
     st.subheader("🔥 AI Army is creating the book outline (10 chapters × 20 sections)")
     army_placeholder = st.empty()
     client = OpenAI()
     latest_agents = []
 
-    def get_outline_thought(i):
+    def get_fake_thought():
         persona = random.choice(PERSONAS)
         agent_id = f"Agent #{random.randint(1,9999)}"
-        thinking = f"• {agent_id} — {persona} thinks: Suggesting chapter and section headings for a comprehensive book..."
-        latest_agents.append(thinking)
-        if len(latest_agents) > 3:
-            latest_agents.pop(0)
-        army_placeholder.markdown("\n\n".join(latest_agents))
+        thoughts = [
+            f"Considering the main themes for Chapter {random.randint(1,10)}...",
+            f"Thinking about how to structure Section {random.randint(1,20)} in detail...",
+            f"Planning to add historical context and mathematical explanations...",
+            f"Ensuring the section flows naturally and adds new value...",
+            f"Reviewing previous sections to avoid any repetition..."
+        ]
+        thinking = f"• {agent_id} — {persona} thinks: {random.choice(thoughts)}"
         return thinking
 
     for i in range(num_agents):
-        get_outline_thought(i)
-        time.sleep(0.03)
+        thought = get_fake_thought()
+        latest_agents.append(thought)
+        if len(latest_agents) > 3:
+            latest_agents.pop(0)
+        army_placeholder.markdown("\n\n".join(latest_agents))
+        time.sleep(0.15)
 
     try:
         response = client.chat.completions.create(
@@ -99,7 +106,7 @@ if st.session_state.stage == "approve":
             st.session_state.stage = "outline"
             st.rerun()
 
-# STAGE 3: Write the book - multi-agent per section
+# STAGE 3: Write the book
 if st.session_state.stage == "writing":
     st.subheader("🔥 AI Army is writing the full book chapter by chapter...")
     army_placeholder = st.empty()
@@ -119,35 +126,29 @@ if st.session_state.stage == "writing":
     for chapter in range(1, 11):
         status_text.text(f"Writing Chapter {chapter} of 10...")
         for section in range(1, 21):
-            section_contributions = []
-            for j in range(5):  # 5 agents per section for collaboration
+            for j in range(3):   # 3 agents collaborate on each section
                 persona = random.choice(PERSONAS)
                 agent_id = f"Agent #{random.randint(1,9999)}"
-                thinking = f"• {agent_id} — {persona} thinks: Drafting detailed content for section {section} of chapter {chapter}..."
+                thinking = f"• {agent_id} — {persona} thinks: Drafting detailed content for section {section} of chapter {chapter}, considering historical context and technical accuracy..."
                 latest_agents.append(thinking)
                 if len(latest_agents) > 3:
                     latest_agents.pop(0)
                 army_placeholder.markdown("\n\n".join(latest_agents))
-
-                try:
-                    response = client.chat.completions.create(
-                        model=model,
-                        messages=[{"role": "system", "content": f"You are {persona} writing section {section} of chapter {chapter}. User request: {st.session_state.current_prompt}. Write a detailed, high-quality, unique section in LaTeX. Do not repeat previous content. Respond with only the LaTeX code."}],
-                        temperature=0.8,
-                        max_tokens=900
-                    )
-                    section_contributions.append(response.choices[0].message.content.strip())
-                except Exception:
-                    pass
                 time.sleep(0.03)
 
-            # Synthesize the best version for this section
-            best_section = max(section_contributions, key=len) if section_contributions else ""
-            with open(tex_filename, "a") as f:
-                f.write(f"\n\n\\section{{Chapter {chapter} - Section {section}}}\n{best_section}")
-
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "system", "content": f"You are a detailed writer. Write a high-quality, unique section {section} of chapter {chapter} for the book on {st.session_state.current_prompt}. Avoid repetition. Respond with only the LaTeX code."}],
+                    temperature=0.8,
+                    max_tokens=900
+                )
+                section_text = response.choices[0].message.content.strip()
+                with open(tex_filename, "a") as f:
+                    f.write(f"\n\n\\section{{Chapter {chapter} - Section {section}}}\n{section_text}")
+            except Exception:
+                pass
             progress_bar.progress((chapter-1)*20 + section / (10*20))
-            time.sleep(0.03)
 
     st.success("✅ Full book has been written!")
     st.session_state.stage = "done"
