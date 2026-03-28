@@ -10,6 +10,27 @@ st.markdown("""
 <style>
     .army-box { height: 220px; overflow-y: hidden; border: 1px solid #262730; padding: 12px; border-radius: 8px; background-color: #1E2127; }
     .latex-box { max-height: 620px; overflow-y: auto; border: 1px solid #262730; padding: 15px; border-radius: 8px; background-color: #1E2127; font-family: monospace; white-space: pre-wrap; }
+    
+    /* Constant Pacman animation */
+    .pacman-container {
+        height: 40px;
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+        background-color: #1E2127;
+        border-radius: 8px;
+        padding: 0 15px;
+        overflow: hidden;
+    }
+    .pacman {
+        font-size: 28px;
+        animation: pacman-move 1.8s linear infinite;
+    }
+    @keyframes pacman-move {
+        0% { transform: translateX(0); }
+        50% { transform: translateX(220px); }
+        100% { transform: translateX(0); }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -27,7 +48,7 @@ if "messages" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 43.0 - Live LaTeX Preview + Constant Detailed Activity**")
+    st.markdown("**Version 48.0 - Sentence-by-Sentence Live Preview + Constant Pacman**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -58,7 +79,7 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.stage = "outline"
     st.rerun()
 
-# STAGE 1: Outline with constant detailed activity
+# STAGE 1: Outline
 if st.session_state.stage == "outline":
     with col_left:
         st.subheader("🔥 AI Army is creating the book outline (10 chapters × 20 sections)")
@@ -66,21 +87,15 @@ if st.session_state.stage == "outline":
         def get_thought():
             persona = random.choice(PERSONAS)
             agent_id = f"Agent #{random.randint(1,9999)}"
-            ideas = [
-                f"Considering the best way to structure Chapter {random.randint(1,10)} with clear logical flow and historical context...",
-                f"Planning to include technical depth and mathematical explanations for Section {random.randint(1,20)}...",
-                f"Thinking about how to make the LaTeX formatting clean, professional and easy to read...",
-                f"Ensuring the content is unique, adds real value and avoids any repetition...",
-                f"Reviewing the overall narrative to keep everything consistent and engaging for the reader..."
-            ]
+            ideas = ["Considering chapter structure...", "Planning historical context...", "Thinking about technical depth...", "Ensuring unique content...", "Reviewing flow..."]
             return f"• {agent_id} — {persona} thinks: {random.choice(ideas)}"
-        for i in range(100):
+        for i in range(120):
             thought = get_thought()
             latest_agents.append(thought)
             if len(latest_agents) > 3:
                 latest_agents.pop(0)
             army_placeholder.markdown("\n\n".join(latest_agents))
-            time.sleep(0.12)
+            time.sleep(0.08)
         try:
             response = client.chat.completions.create(
                 model=model,
@@ -94,23 +109,8 @@ if st.session_state.stage == "outline":
     st.session_state.stage = "approve"
     st.rerun()
 
-# STAGE 2: Approve Outline (still with lively left side)
+# STAGE 2: Approve Outline
 if st.session_state.stage == "approve":
-    with col_left:
-        st.subheader("🔥 AI Army is waiting for your approval...")
-        latest_agents = []
-        def get_thought():
-            persona = random.choice(PERSONAS)
-            agent_id = f"Agent #{random.randint(1,9999)}"
-            ideas = ["Waiting for user decision...", "Reviewing outline quality...", "Preparing to start writing the full book...", "Thinking about how to make each section detailed..."]
-            return f"• {agent_id} — {persona} thinks: {random.choice(ideas)}"
-        for i in range(50):
-            thought = get_thought()
-            latest_agents.append(thought)
-            if len(latest_agents) > 3:
-                latest_agents.pop(0)
-            army_placeholder.markdown("\n\n".join(latest_agents))
-            time.sleep(0.15)
     st.subheader("Proposed Book Outline (10 chapters × 20 sections)")
     st.markdown(st.session_state.outline)
     col1, col2 = st.columns(2)
@@ -120,15 +120,18 @@ if st.session_state.stage == "approve":
             st.rerun()
     with col2:
         if st.button("🔄 No, generate a new outline"):
+            st.session_state.outline = None
             st.session_state.stage = "outline"
             st.rerun()
 
-# STAGE 3: Writing with LIVE LaTeX preview on the right
+# STAGE 3: Writing with sentence-by-sentence live preview
 if st.session_state.stage == "writing":
     with col_left:
         st.subheader("🔥 AI Army is writing the full book chapter by chapter...")
+        st.markdown('<div class="pacman-container"><span class="pacman">🟡</span> <span style="color:#ffcc00; font-weight:bold;">The AI Army is hard at work writing your book...</span></div>', unsafe_allow_html=True)
+        army_placeholder = st.empty()
     with col_right:
-        st.subheader("📜 Live LaTeX Preview (updates in real time)")
+        st.subheader("📜 Live LaTeX Preview (updates sentence by sentence)")
         latex_preview = st.empty()
 
     tex_filename = "book.tex"
@@ -148,7 +151,7 @@ if st.session_state.stage == "writing":
             for j in range(5):
                 persona = random.choice(PERSONAS)
                 agent_id = f"Agent #{random.randint(1,9999)}"
-                thinking = f"• {agent_id} — {persona} thinks: Drafting a very long detailed section {section} of chapter {chapter} with historical context, technical depth, mathematical formulas, and examples..."
+                thinking = f"• {agent_id} — {persona} thinks: Drafting long detailed content for section {section} of chapter {chapter}..."
                 latest_agents.append(thinking)
                 if len(latest_agents) > 3:
                     latest_agents.pop(0)
@@ -158,7 +161,7 @@ if st.session_state.stage == "writing":
                 try:
                     response = client.chat.completions.create(
                         model=model,
-                        messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG, detailed, high-quality section {section} of chapter {chapter} for the book on {st.session_state.current_prompt}. Include history, technical explanations, formulas, examples, and analysis. Make this section at least 800 words long. Respond with only the LaTeX code."}],
+                        messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG detailed section {section} of chapter {chapter} for the book on {st.session_state.current_prompt}. Include history, technical explanations, formulas, examples, and analysis. Make it 800+ words. Respond with only LaTeX code."}],
                         temperature=0.8,
                         max_tokens=2500
                     )
@@ -170,7 +173,7 @@ if st.session_state.stage == "writing":
                 try:
                     synth = client.chat.completions.create(
                         model=model,
-                        messages=[{"role": "system", "content": f"Combine these 5 drafts into ONE long, detailed, non-repetitive section. Make it even longer and better. Output only LaTeX code.\n\n" + "\n\n---\n\n".join(drafts)}],
+                        messages=[{"role": "system", "content": f"Combine these 5 drafts into ONE long detailed non-repetitive section. Make it even longer. Output only LaTeX code.\n\n" + "\n\n---\n\n".join(drafts)}],
                         temperature=0.7,
                         max_tokens=3500
                     )
@@ -180,11 +183,19 @@ if st.session_state.stage == "writing":
             else:
                 section_text = ""
 
+            new_section = f"\n\n\\section{{Chapter {chapter} - Section {section}}}\n{section_text}"
+            st.session_state.tex_content += new_section
             with open(tex_filename, "a") as f:
-                f.write(f"\n\n\\section{{Chapter {chapter} - Section {section}}}\n{section_text}")
+                f.write(new_section)
 
-            st.session_state.tex_content += f"\n\n\\section{{Chapter {chapter} - Section {section}}}\n{section_text}"
-            latex_preview.code(st.session_state.tex_content, language="latex")
+            # Sentence-by-sentence update (full book so far + new lines appearing one by one)
+            current_preview = st.session_state.tex_content
+            lines = section_text.split("\n")
+            for line in lines:
+                if line.strip():
+                    current_preview += line + "\n"
+                    latex_preview.code(current_preview, language="latex")
+                    time.sleep(0.08)
 
             progress_bar.progress(min(1.0, (chapter-1)*20 + section / (10*20)))
 
@@ -206,4 +217,4 @@ if st.session_state.stage == "done":
     with col2:
         st.download_button("📥 Download references.bib", final_bib, "references.bib")
 
-st.caption("💡 Left: 3-line lively conversation • Right: Live LaTeX preview (updates in real time)")
+st.caption("💡 Left: 3-line lively conversation + constant moving Pacman • Right: Live LaTeX preview (sentence by sentence)")
