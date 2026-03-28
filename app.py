@@ -11,7 +11,6 @@ st.markdown("""
     .army-box { height: 220px; overflow-y: hidden; border: 1px solid #262730; padding: 12px; border-radius: 8px; background-color: #1E2127; }
     .latex-box { max-height: 620px; overflow-y: auto; border: 1px solid #262730; padding: 15px; border-radius: 8px; background-color: #1E2127; font-family: monospace; white-space: pre-wrap; }
     
-    /* Constant Pacman animation */
     .pacman-container {
         height: 40px;
         display: flex;
@@ -44,11 +43,13 @@ if "tex_content" not in st.session_state:
     st.session_state.tex_content = ""
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "previous_summary" not in st.session_state:
+    st.session_state.previous_summary = ""
 
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 48.0 - Sentence-by-Sentence Live Preview + Constant Pacman**")
+    st.markdown("**Version 52.0 - Live LaTeX Preview Moves to Every Section**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -77,12 +78,14 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.current_prompt = prompt
     st.session_state.messages = [{"role": "user", "content": prompt}]
     st.session_state.stage = "outline"
+    st.session_state.previous_summary = ""
     st.rerun()
 
 # STAGE 1: Outline
 if st.session_state.stage == "outline":
     with col_left:
         st.subheader("🔥 AI Army is creating the book outline (10 chapters × 20 sections)")
+        st.markdown('<div class="pacman-container"><span class="pacman">🟡</span> <span style="color:#ffcc00; font-weight:bold;">The AI Army is hard at work creating your outline...</span></div>', unsafe_allow_html=True)
         latest_agents = []
         def get_thought():
             persona = random.choice(PERSONAS)
@@ -124,14 +127,14 @@ if st.session_state.stage == "approve":
             st.session_state.stage = "outline"
             st.rerun()
 
-# STAGE 3: Writing with sentence-by-sentence live preview
+# STAGE 3: Writing with sentence-by-sentence live preview (full book grows)
 if st.session_state.stage == "writing":
     with col_left:
         st.subheader("🔥 AI Army is writing the full book chapter by chapter...")
         st.markdown('<div class="pacman-container"><span class="pacman">🟡</span> <span style="color:#ffcc00; font-weight:bold;">The AI Army is hard at work writing your book...</span></div>', unsafe_allow_html=True)
         army_placeholder = st.empty()
     with col_right:
-        st.subheader("📜 Live LaTeX Preview (updates sentence by sentence)")
+        st.subheader("📜 Live LaTeX Preview (sentence by sentence)")
         latex_preview = st.empty()
 
     tex_filename = "book.tex"
@@ -188,9 +191,9 @@ if st.session_state.stage == "writing":
             with open(tex_filename, "a") as f:
                 f.write(new_section)
 
-            # Sentence-by-sentence update (full book so far + new lines appearing one by one)
-            current_preview = st.session_state.tex_content
+            # Sentence-by-sentence update for the new section (full book so far + new line)
             lines = section_text.split("\n")
+            current_preview = st.session_state.tex_content
             for line in lines:
                 if line.strip():
                     current_preview += line + "\n"
