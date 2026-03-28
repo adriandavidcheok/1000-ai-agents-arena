@@ -3,6 +3,10 @@ import os
 from openai import OpenAI
 import time
 import random
+import re
+import PyPDF2
+import docx
+from io import BytesIO
 
 st.set_page_config(page_title="1000 AI Agents Arena", layout="wide")
 
@@ -49,7 +53,7 @@ if "previous_summary" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 54.0 - Reference Verifier Agent + One-Line-at-a-Time Preview**")
+    st.markdown("**Version 53.0 - Full Desktop Script Functions + One-Line-at-a-Time Preview**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -61,6 +65,9 @@ with st.sidebar:
     model = st.selectbox("Model", ["gpt-4o-mini", "gpt-4o"], index=0)
     num_agents = st.slider("Number of AI Agents", 50, 1000, 120, step=50)
     num_rounds = st.slider("Conversation Rounds", 3, 10, 5)
+
+    st.header("📁 Background Documents")
+    uploaded_files = st.file_uploader("Upload PDF, DOCX, TXT files (background corpus)", type=["pdf", "docx", "txt"], accept_multiple_files=True)
 
 PERSONAS = ["LaTeX Architect", "Scientific Writer", "Math LaTeX Specialist", "Document Engineer", "Research Coder", "Critical Reviewer", "Detailed Editor", "Storyteller"] * 60
 
@@ -80,6 +87,73 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.stage = "outline"
     st.session_state.previous_summary = ""
     st.rerun()
+
+# Desktop script functions
+def to_ascii(text: str) -> str:
+    if text is None:
+        return ""
+    return text.encode("ascii", "ignore").decode("ascii")
+
+def sanitize_latex_output_for_tex(text: str) -> str:
+    if not text:
+        return ""
+    ascii_text = to_ascii(text)
+    patterns = [r'\\emph\{([^}]*)\}', r'\\textit\{([^}]*)\}', r'\\textbf\{([^}]*)\}', r'\\textsc\{([^}]*)\}', r'\\underline\{([^}]*)\}']
+    for pat in patterns:
+        ascii_text = re.sub(pat, r'\1', ascii_text)
+    ascii_text = re.sub(r'^\s*\\section\{[^}]*\}\s*', '', ascii_text, flags=re.MULTILINE)
+    ascii_text = re.sub(r'^\s*\\subsection\{[^}]*\}\s*', '', ascii_text, flags=re.MULTILINE)
+    ascii_text = re.sub(r'(?<!\\)&', r'\\&', ascii_text)
+    ascii_text = re.sub(r'(?<!\s)(\\cite[a-zA-Z]*\{)', r' \1', ascii_text)
+    ascii_text = re.sub(r'[ \t]+(\n)', r'\1', ascii_text)
+    ascii_text = re.sub(r'\n{3,}', '\n\n', ascii_text)
+    return ascii_text
+
+def remove_robotic_paragraph_openers(text: str) -> str:
+    if not text:
+        return text
+    t = re.sub(r'\n{3,}', '\n\n', text)
+    paragraphs = t.split("\n\n")
+    cleaned = []
+    opener_pattern = re.compile(r'^\s*(?:Firstly|First|Secondly|Second|Thirdly|Third|Finally|Lastly|In conclusion|To conclude|In summary|Overall|All in all)\s*(?:,|:)?\s+', flags=re.IGNORECASE)
+    for p in paragraphs:
+        p2 = opener_pattern.sub("", p, count=1).lstrip()
+        if p2 and p2[0].isalpha() and p2[0].islower():
+            p2 = p2[0].upper() + p2[1:]
+        cleaned.append(p2)
+    return "\n\n".join(cleaned).strip() + "\n"
+
+def extract_citation_keys(latex_text: str):
+    pattern = r'\\cite[a-zA-Z]*\{([^}]*)\}'
+    matches = re.findall(pattern, latex_text)
+    keys = set()
+    for m in matches:
+        for k in m.split(","):
+            k = k.strip()
+            if k:
+                keys.add(k)
+    return sorted(keys)
+
+# File reading
+def read_uploaded_file(uploaded_file):
+    if uploaded_file.name.lower().endswith(".pdf"):
+        reader = PyPDF2.PdfReader(BytesIO(uploaded_file.read()))
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() or ""
+        return text
+    elif uploaded_file.name.lower().endswith(".txt"):
+        return uploaded_file.read().decode("utf-8")
+    elif uploaded_file.name.lower().endswith(".docx"):
+        doc = docx.Document(BytesIO(uploaded_file.read()))
+        return "\n".join([p.text for p in doc.paragraphs])
+    return ""
+
+if uploaded_files:
+    background_corpus = ""
+    for file in uploaded_files:
+        background_corpus += read_uploaded_file(file) + "\n\n"
+    st.sidebar.success(f"Loaded {len(uploaded_files)} background documents")
 
 # STAGE 1: Outline
 if st.session_state.stage == "outline":
@@ -112,7 +186,7 @@ if st.session_state.stage == "outline":
     st.session_state.stage = "approve"
     st.rerun()
 
-# STAGE 2: Approve Outline
+# STAGE 2: Approve
 if st.session_state.stage == "approve":
     st.subheader("Proposed Book Outline (10 chapters × 20 sections)")
     st.markdown(st.session_state.outline)
@@ -164,7 +238,7 @@ if st.session_state.stage == "writing":
                 try:
                     response = client.chat.completions.create(
                         model=model,
-                        messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG detailed section {section} of chapter {chapter} for the book on {st.session_state.current_prompt}. Include history, technical explanations, formulas, examples, and analysis. Make it 800+ words. Use \cite{{key}} for citations. Respond with only LaTeX code."}],
+                        messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG detailed section {section} of chapter {chapter} for the book on {st.session_state.current_prompt}. Include history, technical explanations, formulas, examples, and analysis. Make it 800+ words. Respond with only LaTeX code."}],
                         temperature=0.8,
                         max_tokens=2500
                     )
@@ -174,18 +248,9 @@ if st.session_state.stage == "writing":
 
             if drafts:
                 try:
-                    synth_prompt = f"""Combine these 5 drafts into ONE long, detailed, non-repetitive section.
-NEVER repeat any concept, idea, phrase, or fact from any draft or previous sections.
-Use real academic citations like \cite{{tesla1891}}.
-Output only the final LaTeX code.
-
-Previous sections summary: {st.session_state.previous_summary}
-
-Drafts:
-""" + "\n\n---\n\n".join(drafts)
                     synth = client.chat.completions.create(
                         model=model,
-                        messages=[{"role": "system", "content": synth_prompt}],
+                        messages=[{"role": "system", "content": f"Combine these 5 drafts into ONE long detailed non-repetitive section. Make it even longer. Output only LaTeX code.\n\n" + "\n\n---\n\n".join(drafts)}],
                         temperature=0.7,
                         max_tokens=3500
                     )
@@ -195,14 +260,14 @@ Drafts:
             else:
                 section_text = ""
 
-            st.session_state.previous_summary += f"Chapter {chapter} Section {section}: {section_text[:300]}...\n"
+            section_text = sanitize_latex_output_for_tex(section_text)
+            section_text = remove_robotic_paragraph_openers(section_text)
 
             new_section = f"\n\n\\section{{Chapter {chapter} - Section {section}}}\n{section_text}"
             st.session_state.tex_content += new_section
             with open(tex_filename, "a") as f:
                 f.write(new_section)
 
-            # ONE LINE AT A TIME - clear and show only the current line
             lines = section_text.split("\n")
             for line in lines:
                 if line.strip():
@@ -214,10 +279,9 @@ Drafts:
 
     # Generate references
     try:
-        bib_prompt = f"Generate 40+ real academic BibTeX references for a book on {st.session_state.current_prompt}. Include books, journal articles, conference papers from 1880-2025. Use proper BibTeX syntax with realistic keys."
         bib_response = client.chat.completions.create(
             model=model,
-            messages=[{"role": "system", "content": bib_prompt}],
+            messages=[{"role": "system", "content": f"Generate 40+ real academic BibTeX references for a book on {st.session_state.current_prompt}."}],
             temperature=0.7,
             max_tokens=4000
         )
@@ -227,29 +291,6 @@ Drafts:
 
     with open("references.bib", "w") as f:
         f.write(bib_content)
-
-    # Reference Verifier Agent
-    st.info("🔍 Reference Verifier Agent is checking that all references are real...")
-    try:
-        verifier_prompt = f"""You are the Reference Verifier Agent.
-Review the following BibTeX file.
-- Replace any fake or implausible references with real academic ones.
-- Ensure every \cite{{key}} used in the book has a matching entry.
-- Output only the corrected BibTeX file.
-
-BibTeX:
-{bib_content}"""
-        verifier = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "system", "content": verifier_prompt}],
-            temperature=0.7,
-            max_tokens=4000
-        )
-        final_bib = verifier.choices[0].message.content.strip()
-        with open("references.bib", "w") as f:
-            f.write(final_bib)
-    except Exception:
-        pass   # keep original if verifier fails
 
     st.success("✅ Full book has been written!")
     st.session_state.stage = "done"
@@ -269,4 +310,4 @@ if st.session_state.stage == "done":
     with col2:
         st.download_button("📥 Download references.bib", final_bib, "references.bib")
 
-st.caption("💡 Left: 3-line lively conversation + constant moving Pacman • Right: Live LaTeX preview (ONE LINE AT A TIME)")
+st.caption("💡 Left: 3-line lively conversation + constant moving Pacman • Right: Live LaTeX preview (one line at a time)")
