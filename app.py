@@ -51,13 +51,11 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "previous_summary" not in st.session_state:
     st.session_state.previous_summary = ""
-if "chapter_files" not in st.session_state:
-    st.session_state.chapter_files = {}  # chapter_number -> {"tex": path, "bib": path}
 
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 55.0 - Per-Chapter Downloads + Live BibTeX Preview (one line at a time)**")
+    st.markdown("**Version 56.0 - Forced 10 Chapters × 20 Sections + One-Line Preview**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -92,7 +90,6 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.previous_summary = ""
     st.rerun()
 
-# File reading
 def read_uploaded_file(uploaded_file):
     if uploaded_file.name.lower().endswith(".pdf"):
         reader = PyPDF2.PdfReader(BytesIO(uploaded_file.read()))
@@ -113,7 +110,7 @@ if uploaded_files:
         background_corpus += read_uploaded_file(file) + "\n\n"
     st.sidebar.success(f"Loaded {len(uploaded_files)} background documents")
 
-# STAGE 1: Outline
+# STAGE 1: Outline (forced 10 chapters × 20 sections)
 if st.session_state.stage == "outline":
     with col_left:
         st.subheader("🔥 AI Army is creating the book outline (10 chapters × 20 sections)")
@@ -134,11 +131,22 @@ if st.session_state.stage == "outline":
         try:
             response = client.chat.completions.create(
                 model=model,
-                messages=[{"role": "system", "content": f"Create a detailed book outline for: {st.session_state.current_prompt}. Exactly 10 chapters, each with exactly 20 sections. Output clean markdown with clear headings."}],
-                temperature=0.8,
-                max_tokens=1600
+                messages=[{"role": "system", "content": "You MUST create EXACTLY 10 chapters. Each chapter MUST have EXACTLY 20 sections. Use numbered chapters and numbered sections. Output clean markdown with clear headings. Do not use less than 10 chapters or less than 20 sections per chapter."}],
+                temperature=0.7,
+                max_tokens=4000
             )
-            st.session_state.outline = response.choices[0].message.content.strip()
+            raw_outline = response.choices[0].message.content.strip()
+            # Force correct structure if the model fails
+            if len(re.findall(r'Chapter \d+', raw_outline)) < 10:
+                st.warning("Outline was too short. Regenerating...")
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "system", "content": "Create EXACTLY 10 chapters numbered 1 to 10. Each chapter must have EXACTLY 20 sections numbered 1 to 20. Output clean markdown."}],
+                    temperature=0.7,
+                    max_tokens=4000
+                )
+                raw_outline = response.choices[0].message.content.strip()
+            st.session_state.outline = raw_outline
         except Exception:
             st.session_state.outline = "Error generating outline."
     st.session_state.stage = "approve"
@@ -199,7 +207,7 @@ if st.session_state.stage == "writing":
                 try:
                     response = client.chat.completions.create(
                         model=model,
-                        messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG detailed section {section} of chapter {chapter} for the book on {st.session_state.current_prompt}. Include history, technical explanations, formulas, examples, and analysis. Make it 800+ words. Use \cite{{key}} for citations. Respond with only LaTeX code."}],
+                        messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG detailed section {section} of chapter {chapter} for the book on {st.session_state.current_prompt}. Include history, technical explanations, formulas, examples, and analysis. Make it 800+ words. Respond with only LaTeX code."}],
                         temperature=0.8,
                         max_tokens=2500
                     )
@@ -229,7 +237,6 @@ if st.session_state.stage == "writing":
             with open(tex_filename, "a") as f:
                 f.write(new_section)
 
-            # ONE LINE AT A TIME for LaTeX preview
             lines = section_text.split("\n")
             for line in lines:
                 if line.strip():
@@ -276,8 +283,8 @@ if st.session_state.stage == "done":
 
     col1, col2 = st.columns(2)
     with col1:
-        st.download_button("📥 Download full book.tex", final_tex, "book.tex")
+        st.download_button("📥 Download book.tex", final_tex, "book.tex")
     with col2:
-        st.download_button("📥 Download full references.bib", final_bib, "references.bib")
+        st.download_button("📥 Download references.bib", final_bib, "references.bib")
 
 st.caption("💡 Left: 3-line lively conversation + constant moving Pacman • Right: Live LaTeX + Live BibTeX preview (one line at a time)")
