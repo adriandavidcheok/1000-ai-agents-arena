@@ -20,13 +20,15 @@ if "current_prompt" not in st.session_state:
     st.session_state.current_prompt = None
 if "outline" not in st.session_state:
     st.session_state.outline = None
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 30.0 - Exact 6-Step Workflow + Fast 3-Line Army**")
+    st.markdown("**Version 31.0 - Exact 6-Step Workflow + Fast 3-Line Army**")
     if st.session_state.current_prompt:
-        st.success(f"**Current Task:** {st.session_state.current_prompt}")
+        st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
 with st.sidebar:
     st.header("⚙️ Settings")
@@ -39,43 +41,39 @@ with st.sidebar:
 
 PERSONAS = ["LaTeX Architect", "Scientific Writer", "Math LaTeX Specialist", "Document Engineer", "Research Coder", "Critic", "Optimist", "Devil's Advocate"] * 60
 
-for msg in st.session_state.messages if "messages" in st.session_state else []:
+for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
 if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.current_prompt = prompt
     st.session_state.messages = [{"role": "user", "content": prompt}]
+    st.session_state.stage = "outline"
 
-# ==================== STAGE 1: OUTLINE ====================
+# STAGE 1: Generate Outline
 if st.session_state.stage == "outline":
     st.subheader("🔥 AI Army is creating the book outline (10 chapters × 20 sections)")
     client = OpenAI()
-    outline_text = ""
-
-    def get_outline_contribution(i):
-        persona = random.choice(PERSONAS)
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "system", "content": f"You are {persona}. Create a detailed book outline for: {st.session_state.current_prompt}. Exactly 10 chapters, each with exactly 20 sections. Output clean markdown."}],
-                temperature=0.8,
-                max_tokens=1200
-            )
-            return response.choices[0].message.content.strip()
-        except Exception:
-            return ""
-
     with st.spinner("Generating outline..."):
-        contributions = [get_outline_contribution(i) for i in range(num_agents)]
-        outline_text = "\n\n".join([c for c in contributions if c])
-
-    st.session_state.outline = outline_text
+        outline_text = ""
+        for i in range(num_agents):
+            persona = random.choice(PERSONAS)
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "system", "content": f"You are {persona}. Create a detailed book outline for: {st.session_state.current_prompt}. Exactly 10 chapters, each with exactly 20 sections. Output clean markdown."}],
+                    temperature=0.8,
+                    max_tokens=1200
+                )
+                outline_text += response.choices[0].message.content.strip() + "\n\n"
+            except Exception:
+                pass
+        st.session_state.outline = outline_text
     st.session_state.stage = "approve"
 
-# ==================== STAGE 2: APPROVE ====================
+# STAGE 2: Approve Outline
 if st.session_state.stage == "approve":
-    st.subheader("Proposed Book Outline")
+    st.subheader("Proposed Book Outline (10 chapters × 20 sections)")
     st.markdown(st.session_state.outline)
     col1, col2 = st.columns(2)
     with col1:
@@ -87,7 +85,7 @@ if st.session_state.stage == "approve":
             st.session_state.stage = "outline"
             st.rerun()
 
-# ==================== STAGE 3: WRITE BOOK ====================
+# STAGE 3: Write the book
 if st.session_state.stage == "writing":
     st.subheader("🔥 AI Army is writing the full book chapter by chapter...")
     tex_filename = "book.tex"
@@ -124,7 +122,7 @@ if st.session_state.stage == "writing":
     st.success("✅ Full book has been written!")
     st.session_state.stage = "done"
 
-# ==================== STAGE 4: DONE ====================
+# STAGE 4: Done
 if st.session_state.stage == "done":
     st.subheader("🎉 Book is complete!")
     with open("book.tex", "r") as f:
@@ -138,4 +136,4 @@ if st.session_state.stage == "done":
     with col2:
         st.download_button("📥 Download references.bib", final_bib, "references.bib")
 
-st.caption("💡 Left side shows only the latest 3 agents (fast-moving, 1 per line). Right side shows outline or final LaTeX.")
+st.caption("💡 Left side shows only the latest 3 agents, 1 per line, fast-moving. Right side is fixed with its own scroll bar.")
