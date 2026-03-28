@@ -45,15 +45,19 @@ if "outline" not in st.session_state:
     st.session_state.outline = None
 if "tex_content" not in st.session_state:
     st.session_state.tex_content = ""
+if "bib_content" not in st.session_state:
+    st.session_state.bib_content = ""
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "previous_summary" not in st.session_state:
     st.session_state.previous_summary = ""
+if "chapter_files" not in st.session_state:
+    st.session_state.chapter_files = {}  # chapter_number -> {"tex": path, "bib": path}
 
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 54.0 - OpenAI Client Fixed + One-Line-at-a-Time Preview**")
+    st.markdown("**Version 55.0 - Per-Chapter Downloads + Live BibTeX Preview (one line at a time)**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -67,9 +71,11 @@ with st.sidebar:
     num_rounds = st.slider("Conversation Rounds", 3, 10, 5)
 
     st.header("📁 Background Documents")
-    uploaded_files = st.file_uploader("Upload PDF, DOCX, TXT files (background corpus)", type=["pdf", "docx", "txt"], accept_multiple_files=True)
+    uploaded_files = st.file_uploader("Upload PDF, DOCX, TXT files", type=["pdf", "docx", "txt"], accept_multiple_files=True)
 
 PERSONAS = ["LaTeX Architect", "Scientific Writer", "Math LaTeX Specialist", "Document Engineer", "Research Coder", "Critical Reviewer", "Detailed Editor", "Storyteller"] * 60
+
+client = OpenAI(api_key=api_key) if api_key else None
 
 col_left, col_right = st.columns([3, 2])
 
@@ -86,52 +92,7 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.previous_summary = ""
     st.rerun()
 
-# Desktop script functions (same as your original code)
-def to_ascii(text: str) -> str:
-    if text is None:
-        return ""
-    return text.encode("ascii", "ignore").decode("ascii")
-
-def sanitize_latex_output_for_tex(text: str) -> str:
-    if not text:
-        return ""
-    ascii_text = to_ascii(text)
-    patterns = [r'\\emph\{([^}]*)\}', r'\\textit\{([^}]*)\}', r'\\textbf\{([^}]*)\}', r'\\textsc\{([^}]*)\}', r'\\underline\{([^}]*)\}']
-    for pat in patterns:
-        ascii_text = re.sub(pat, r'\1', ascii_text)
-    ascii_text = re.sub(r'^\s*\\section\{[^}]*\}\s*', '', ascii_text, flags=re.MULTILINE)
-    ascii_text = re.sub(r'^\s*\\subsection\{[^}]*\}\s*', '', ascii_text, flags=re.MULTILINE)
-    ascii_text = re.sub(r'(?<!\\)&', r'\\&', ascii_text)
-    ascii_text = re.sub(r'(?<!\s)(\\cite[a-zA-Z]*\{)', r' \1', ascii_text)
-    ascii_text = re.sub(r'[ \t]+(\n)', r'\1', ascii_text)
-    ascii_text = re.sub(r'\n{3,}', '\n\n', ascii_text)
-    return ascii_text
-
-def remove_robotic_paragraph_openers(text: str) -> str:
-    if not text:
-        return text
-    t = re.sub(r'\n{3,}', '\n\n', text)
-    paragraphs = t.split("\n\n")
-    cleaned = []
-    opener_pattern = re.compile(r'^\s*(?:Firstly|First|Secondly|Second|Thirdly|Third|Finally|Lastly|In conclusion|To conclude|In summary|Overall|All in all)\s*(?:,|:)?\s+', flags=re.IGNORECASE)
-    for p in paragraphs:
-        p2 = opener_pattern.sub("", p, count=1).lstrip()
-        if p2 and p2[0].isalpha() and p2[0].islower():
-            p2 = p2[0].upper() + p2[1:]
-        cleaned.append(p2)
-    return "\n\n".join(cleaned).strip() + "\n"
-
-def extract_citation_keys(latex_text: str):
-    pattern = r'\\cite[a-zA-Z]*\{([^}]*)\}'
-    matches = re.findall(pattern, latex_text)
-    keys = set()
-    for m in matches:
-        for k in m.split(","):
-            k = k.strip()
-            if k:
-                keys.add(k)
-    return sorted(keys)
-
+# File reading
 def read_uploaded_file(uploaded_file):
     if uploaded_file.name.lower().endswith(".pdf"):
         reader = PyPDF2.PdfReader(BytesIO(uploaded_file.read()))
@@ -151,13 +112,6 @@ if uploaded_files:
     for file in uploaded_files:
         background_corpus += read_uploaded_file(file) + "\n\n"
     st.sidebar.success(f"Loaded {len(uploaded_files)} background documents")
-
-# Create client ONLY after key is entered
-if not api_key:
-    st.warning("⚠️ Please enter your OpenAI API Key in the sidebar to continue.")
-    st.stop()
-
-client = OpenAI(api_key=api_key)
 
 # STAGE 1: Outline
 if st.session_state.stage == "outline":
@@ -214,12 +168,15 @@ if st.session_state.stage == "writing":
     with col_right:
         st.subheader("📜 Live LaTeX Preview (one line at a time)")
         latex_preview = st.empty()
+        st.subheader("📜 Live BibTeX Preview (one line at a time)")
+        bib_preview = st.empty()
 
     tex_filename = "book.tex"
     with open(tex_filename, "w") as f:
         f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{" + st.session_state.current_prompt + r"}\maketitle\begin{abstract}This book was written collaboratively by the AI Army.\end{abstract}")
 
     st.session_state.tex_content = ""
+    st.session_state.bib_content = ""
     latest_agents = []
 
     progress_bar = st.progress(0)
@@ -242,7 +199,7 @@ if st.session_state.stage == "writing":
                 try:
                     response = client.chat.completions.create(
                         model=model,
-                        messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG detailed section {section} of chapter {chapter} for the book on {st.session_state.current_prompt}. Include history, technical explanations, formulas, examples, and analysis. Make it 800+ words. Respond with only LaTeX code."}],
+                        messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG detailed section {section} of chapter {chapter} for the book on {st.session_state.current_prompt}. Include history, technical explanations, formulas, examples, and analysis. Make it 800+ words. Use \cite{{key}} for citations. Respond with only LaTeX code."}],
                         temperature=0.8,
                         max_tokens=2500
                     )
@@ -272,7 +229,7 @@ if st.session_state.stage == "writing":
             with open(tex_filename, "a") as f:
                 f.write(new_section)
 
-            # ONE LINE AT A TIME - clear and show only the current line
+            # ONE LINE AT A TIME for LaTeX preview
             lines = section_text.split("\n")
             for line in lines:
                 if line.strip():
@@ -282,7 +239,7 @@ if st.session_state.stage == "writing":
 
             progress_bar.progress(min(1.0, (chapter-1)*20 + section / (10*20)))
 
-    # Generate references
+    # Generate BibTeX
     try:
         bib_response = client.chat.completions.create(
             model=model,
@@ -294,8 +251,16 @@ if st.session_state.stage == "writing":
     except Exception:
         bib_content = "@article{placeholder,\n  title = {Placeholder},\n  author = {AI Army},\n  year = {2026}\n}\n"
 
+    st.session_state.bib_content = bib_content
     with open("references.bib", "w") as f:
         f.write(bib_content)
+
+    # One line at a time for BibTeX preview
+    bib_lines = bib_content.split("\n")
+    for line in bib_lines:
+        if line.strip():
+            bib_preview.code(line, language="bibtex")
+            time.sleep(0.08)
 
     st.success("✅ Full book has been written!")
     st.session_state.stage = "done"
@@ -311,8 +276,8 @@ if st.session_state.stage == "done":
 
     col1, col2 = st.columns(2)
     with col1:
-        st.download_button("📥 Download book.tex", final_tex, "book.tex")
+        st.download_button("📥 Download full book.tex", final_tex, "book.tex")
     with col2:
-        st.download_button("📥 Download references.bib", final_bib, "references.bib")
+        st.download_button("📥 Download full references.bib", final_bib, "references.bib")
 
-st.caption("💡 Left: 3-line lively conversation + constant moving Pacman • Right: Live LaTeX preview (one line at a time)")
+st.caption("💡 Left: 3-line lively conversation + constant moving Pacman • Right: Live LaTeX + Live BibTeX preview (one line at a time)")
