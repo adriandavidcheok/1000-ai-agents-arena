@@ -13,6 +13,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Initialize session state
 if "stage" not in st.session_state:
     st.session_state.stage = "idle"
 if "current_prompt" not in st.session_state:
@@ -21,6 +22,8 @@ if "outline" not in st.session_state:
     st.session_state.outline = None
 if "tex_content" not in st.session_state:
     st.session_state.tex_content = ""
+if "messages" not in st.session_state:   # ← This line fixes your error
+    st.session_state.messages = []
 
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
@@ -48,7 +51,6 @@ with col_left:
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
-
     army_placeholder = st.empty()
 
 if prompt := st.chat_input("Ask the swarm anything..."):
@@ -57,15 +59,15 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.stage = "outline"
     st.rerun()
 
-# STAGE 1: Outline
+# STAGE 1: Outline with constant lively conversation
 if st.session_state.stage == "outline":
     with col_left:
-        st.subheader("🔥 AI Army is creating the book outline...")
+        st.subheader("🔥 AI Army is creating the book outline (10 chapters × 20 sections)")
         latest_agents = []
         def get_thought():
             persona = random.choice(PERSONAS)
             agent_id = f"Agent #{random.randint(1,9999)}"
-            ideas = ["Planning chapter structure...", "Adding historical context...", "Thinking about technical depth...", "Ensuring unique content...", "Reviewing flow..."]
+            ideas = ["Considering chapter structure...", "Planning historical context...", "Thinking about technical depth...", "Ensuring unique content...", "Reviewing flow..."]
             return f"• {agent_id} — {persona} thinks: {random.choice(ideas)}"
         for i in range(100):
             thought = get_thought()
@@ -101,12 +103,12 @@ if st.session_state.stage == "approve":
             st.session_state.stage = "outline"
             st.rerun()
 
-# STAGE 3: Writing with live preview
+# STAGE 3: Writing with LIVE LaTeX preview on the right
 if st.session_state.stage == "writing":
     with col_left:
-        st.subheader("🔥 AI Army is writing the full book...")
+        st.subheader("🔥 AI Army is writing the full book chapter by chapter...")
     with col_right:
-        st.subheader("📜 Live LaTeX Preview (updating in real time)")
+        st.subheader("📜 Live LaTeX Preview (updates in real time)")
         latex_preview = st.empty()
 
     tex_filename = "book.tex"
@@ -125,7 +127,7 @@ if st.session_state.stage == "writing":
             for j in range(5):
                 persona = random.choice(PERSONAS)
                 agent_id = f"Agent #{random.randint(1,9999)}"
-                thinking = f"• {agent_id} — {persona} thinks: Drafting detailed content for section {section} of chapter {chapter} with historical context, technical depth, and LaTeX formulas..."
+                thinking = f"• {agent_id} — {persona} thinks: Drafting long detailed content for section {section} of chapter {chapter}..."
                 latest_agents.append(thinking)
                 if len(latest_agents) > 3:
                     latest_agents.pop(0)
@@ -135,7 +137,7 @@ if st.session_state.stage == "writing":
                 try:
                     response = client.chat.completions.create(
                         model=model,
-                        messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG, detailed section {section} of chapter {chapter} for the book on {st.session_state.current_prompt}. Include historical context, technical explanations, mathematical formulas, and analysis. Make this section at least 800 words long. Respond with only the LaTeX code."}],
+                        messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG detailed section {section} of chapter {chapter} for the book on {st.session_state.current_prompt}. Include history, technical explanations, formulas, examples. Make it 800+ words. Respond with only LaTeX code."}],
                         temperature=0.8,
                         max_tokens=2500
                     )
@@ -143,12 +145,11 @@ if st.session_state.stage == "writing":
                 except Exception:
                     pass
 
-            # Synthesizer
             if drafts:
                 try:
                     synth = client.chat.completions.create(
                         model=model,
-                        messages=[{"role": "system", "content": f"Combine these 5 drafts into ONE long, detailed, non-repetitive section. Make it even longer and better. Output only LaTeX code.\n\n" + "\n\n---\n\n".join(drafts)}],
+                        messages=[{"role": "system", "content": f"Combine these 5 drafts into ONE long detailed non-repetitive section. Make it even longer. Output only LaTeX code.\n\n" + "\n\n---\n\n".join(drafts)}],
                         temperature=0.7,
                         max_tokens=3500
                     )
