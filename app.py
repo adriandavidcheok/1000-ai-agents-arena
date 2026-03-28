@@ -9,114 +9,133 @@ st.set_page_config(page_title="1000 AI Agents Arena", layout="wide")
 
 st.markdown("""
 <style>
-    .army-box { 
-        height: 220px; 
-        overflow-y: hidden; 
-        border: 1px solid #262730; 
-        padding: 12px; 
-        border-radius: 8px; 
-        background-color: #1E2127; 
-    }
-    .latex-box { 
-        max-height: 620px; 
-        overflow-y: auto; 
-        border: 1px solid #262730; 
-        padding: 15px; 
-        border-radius: 8px; 
-        background-color: #1E2127; 
-        font-family: monospace; 
-        white-space: pre-wrap; 
-    }
+    .army-box { height: 220px; overflow-y: hidden; border: 1px solid #262730; padding: 12px; border-radius: 8px; background-color: #1E2127; }
+    .latex-box { max-height: 620px; overflow-y: auto; border: 1px solid #262730; padding: 15px; border-radius: 8px; background-color: #1E2127; font-family: monospace; white-space: pre-wrap; }
 </style>
 """, unsafe_allow_html=True)
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+if "stage" not in st.session_state:
+    st.session_state.stage = "outline"
 if "current_prompt" not in st.session_state:
     st.session_state.current_prompt = None
+if "outline" not in st.session_state:
+    st.session_state.outline = None
 
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
-    st.caption("Live in your browser • Shareable link • Massive LaTeX Builder")
-    st.markdown("**Version 30.0 - Fast 3-Line Lively Conversation**")
+    st.caption("Live in your browser • Shareable link • Massive Book Builder")
+    st.markdown("**Version 30.0 - Exact 6-Step Workflow + Fast 3-Line Army**")
     if st.session_state.current_prompt:
-        st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
+        st.success(f"**Current Task:** {st.session_state.current_prompt}")
 
 with st.sidebar:
     st.header("⚙️ Settings")
     api_key = st.text_input("OpenAI API Key", type="password", value=os.getenv("OPENAI_API_KEY", ""))
     if api_key:
         os.environ["OPENAI_API_KEY"] = api_key
-    model = st.selectbox("Latest Model", ["gpt-4o-mini", "gpt-4o"], index=0)
-    num_agents = st.slider("Number of AI Agents", 50, 1000, 150, step=50)
+    model = st.selectbox("Model", ["gpt-4o-mini", "gpt-4o"], index=0)
+    num_agents = st.slider("Number of AI Agents", 50, 1000, 120, step=50)
     num_rounds = st.slider("Conversation Rounds", 3, 10, 5)
 
 PERSONAS = ["LaTeX Architect", "Scientific Writer", "Math LaTeX Specialist", "Document Engineer", "Research Coder", "Critic", "Optimist", "Devil's Advocate"] * 60
 
-for msg in st.session_state.messages:
+for msg in st.session_state.messages if "messages" in st.session_state else []:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
 if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.current_prompt = prompt
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    st.session_state.messages = [{"role": "user", "content": prompt}]
 
-    tex_filename = "massive_paper.tex"
+# ==================== STAGE 1: OUTLINE ====================
+if st.session_state.stage == "outline":
+    st.subheader("🔥 AI Army is creating the book outline (10 chapters × 20 sections)")
+    client = OpenAI()
+    outline_text = ""
+
+    def get_outline_contribution(i):
+        persona = random.choice(PERSONAS)
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "system", "content": f"You are {persona}. Create a detailed book outline for: {st.session_state.current_prompt}. Exactly 10 chapters, each with exactly 20 sections. Output clean markdown."}],
+                temperature=0.8,
+                max_tokens=1200
+            )
+            return response.choices[0].message.content.strip()
+        except Exception:
+            return ""
+
+    with st.spinner("Generating outline..."):
+        contributions = [get_outline_contribution(i) for i in range(num_agents)]
+        outline_text = "\n\n".join([c for c in contributions if c])
+
+    st.session_state.outline = outline_text
+    st.session_state.stage = "approve"
+
+# ==================== STAGE 2: APPROVE ====================
+if st.session_state.stage == "approve":
+    st.subheader("Proposed Book Outline")
+    st.markdown(st.session_state.outline)
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("✅ Yes, proceed to write the full book", type="primary"):
+            st.session_state.stage = "writing"
+            st.rerun()
+    with col2:
+        if st.button("🔄 No, generate a new outline"):
+            st.session_state.stage = "outline"
+            st.rerun()
+
+# ==================== STAGE 3: WRITE BOOK ====================
+if st.session_state.stage == "writing":
+    st.subheader("🔥 AI Army is writing the full book chapter by chapter...")
+    tex_filename = "book.tex"
+    bib_filename = "references.bib"
+
     with open(tex_filename, "w") as f:
-        f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{" + prompt + r"}\maketitle\begin{abstract}This massive document is being built live by the AI Army.\end{abstract}")
+        f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{" + st.session_state.current_prompt + r"}\maketitle\begin{abstract}This book was written collaboratively by the AI Army.\end{abstract}")
 
-    col_left, col_right = st.columns([2, 1])
+    with open(bib_filename, "w") as f:
+        f.write("@article{placeholder,\n  title = {Placeholder},\n  author = {AI Army},\n  year = {2026}\n}\n")
 
-    with col_left:
-        st.subheader("🔥 AI Army Conversation (only latest 3 agents visible)")
-        army_placeholder = st.empty()   # single placeholder we update
-        client = OpenAI()
-        latest_agents = []   # keeps only the latest 3
+    progress_bar = st.progress(0)
+    status_text = st.empty()
 
-        def get_agent_response(i, round_num):
+    for chapter in range(1, 11):
+        status_text.text(f"Writing Chapter {chapter} of 10...")
+        for section in range(1, 21):
             persona = random.choice(PERSONAS)
-            agent_id = f"Agent #{random.randint(1,9999)}"
             try:
                 response = client.chat.completions.create(
                     model=model,
-                    messages=[{"role": "system", "content": f"You are {persona} in a live AI Army discussion. User request: {prompt}. Respond EXACTLY in this format:\nThinking: [one short sentence]\nContribution: [your reply or new LaTeX section]"}],
-                    temperature=0.9,
-                    max_tokens=700
+                    messages=[{"role": "system", "content": f"You are {persona} writing section {section} of chapter {chapter}. User request: {st.session_state.current_prompt}. Write a detailed, high-quality section in LaTeX. Respond with only the LaTeX code."}],
+                    temperature=0.8,
+                    max_tokens=900
                 )
-                reply = response.choices[0].message.content.strip()
-                thinking = reply.split("Contribution:")[0].replace("Thinking:", "").strip() if "Contribution:" in reply else reply[:120]
-                contribution = reply.split("Contribution:")[1].strip() if "Contribution:" in reply else reply
-                return thinking, contribution, f"**{agent_id} — {persona}**"
-            except Exception:
-                return "Error", "", f"**{agent_id}**"
-
-        for round_num in range(1, num_rounds + 1):
-            st.write(f"**Round {round_num} of {num_rounds}**")
-            for i in range(num_agents):
-                thinking, contribution, header = get_agent_response(i, round_num)
-                latest_agents.append(f"• {header} thinks: {thinking}")
-                if len(latest_agents) > 3:
-                    latest_agents.pop(0)   # remove oldest
-
-                # Update the 3-line box instantly
-                army_placeholder.markdown("\n\n".join(latest_agents))
-                
+                section_text = response.choices[0].message.content.strip()
                 with open(tex_filename, "a") as f:
-                    f.write("\n\n" + contribution)
-                
-                time.sleep(0.025)   # very fast moving text
+                    f.write(f"\n\n\\section{{Chapter {chapter} - Section {section}}}\n{section_text}")
+            except Exception:
+                pass
+            progress_bar.progress((chapter-1)*20 + section / (10*20))
+            time.sleep(0.03)
 
-        st.success(f"✅ AI Army conversation finished!")
+    st.success("✅ Full book has been written!")
+    st.session_state.stage = "done"
 
-    with col_right:
-        st.subheader("📜 Massive LaTeX Document (fixed scrollable)")
-        with open(tex_filename, "r") as f:
-            final_latex = f.read()
-        st.markdown('<div class="latex-box">' + st.code(final_latex, language="latex") + '</div>', unsafe_allow_html=True)
-        st.download_button("📥 Download Full LaTeX (.tex)", final_latex, "massive_paper.tex")
+# ==================== STAGE 4: DONE ====================
+if st.session_state.stage == "done":
+    st.subheader("🎉 Book is complete!")
+    with open("book.tex", "r") as f:
+        final_tex = f.read()
+    with open("references.bib", "r") as f:
+        final_bib = f.read()
 
-    st.session_state.messages.append({"role": "assistant", "content": f"**AI Army conversation completed**"})
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button("📥 Download book.tex", final_tex, "book.tex")
+    with col2:
+        st.download_button("📥 Download references.bib", final_bib, "references.bib")
 
-st.caption("💡 Left side shows only the latest 3 agents, 1 per line, fast-moving, no scrolling. Right LaTeX box is fixed with its own scroll bar.")
+st.caption("💡 Left side shows only the latest 3 agents (fast-moving, 1 per line). Right side shows outline or final LaTeX.")
