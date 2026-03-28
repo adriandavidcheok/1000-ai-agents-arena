@@ -53,7 +53,7 @@ if "previous_summary" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 53.0 - Full Desktop Script Functions + One-Line-at-a-Time Preview**")
+    st.markdown("**Version 53.0 - Full Desktop Functions + One-Line-at-a-Time Preview**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -134,7 +134,6 @@ def extract_citation_keys(latex_text: str):
                 keys.add(k)
     return sorted(keys)
 
-# File reading
 def read_uploaded_file(uploaded_file):
     if uploaded_file.name.lower().endswith(".pdf"):
         reader = PyPDF2.PdfReader(BytesIO(uploaded_file.read()))
@@ -186,7 +185,7 @@ if st.session_state.stage == "outline":
     st.session_state.stage = "approve"
     st.rerun()
 
-# STAGE 2: Approve
+# STAGE 2: Approve Outline
 if st.session_state.stage == "approve":
     st.subheader("Proposed Book Outline (10 chapters × 20 sections)")
     st.markdown(st.session_state.outline)
@@ -268,6 +267,7 @@ if st.session_state.stage == "writing":
             with open(tex_filename, "a") as f:
                 f.write(new_section)
 
+            # ONE LINE AT A TIME - clear and show only the current line
             lines = section_text.split("\n")
             for line in lines:
                 if line.strip():
