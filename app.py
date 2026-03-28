@@ -14,22 +14,19 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-if "stage" not in st.session_state:
-    st.session_state.stage = "idle"
 if "current_prompt" not in st.session_state:
     st.session_state.current_prompt = None
 if "outline" not in st.session_state:
     st.session_state.outline = None
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+if "stage" not in st.session_state:
+    st.session_state.stage = "idle"
 
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 34.0 - Heavy Debug + Fixed 3-Line Army**")
+    st.markdown("**Version 34.0 - Exact 6-Step Workflow + Fast 3-Line Army**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
-    st.info(f"**DEBUG: Current Stage = {st.session_state.stage}**")
 
 with st.sidebar:
     st.header("⚙️ Settings")
@@ -42,7 +39,7 @@ with st.sidebar:
 
 PERSONAS = ["LaTeX Architect", "Scientific Writer", "Math LaTeX Specialist", "Document Engineer", "Research Coder", "Critic", "Optimist", "Devil's Advocate"] * 60
 
-for msg in st.session_state.messages:
+for msg in st.session_state.messages if "messages" in st.session_state else []:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
@@ -55,7 +52,6 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 # STAGE 1: Generate Outline
 if st.session_state.stage == "outline":
     st.subheader("🔥 AI Army is creating the book outline (10 chapters × 20 sections)")
-    st.info("DEBUG: Generating outline now...")
     client = OpenAI()
     try:
         response = client.chat.completions.create(
@@ -65,10 +61,8 @@ if st.session_state.stage == "outline":
             max_tokens=1600
         )
         st.session_state.outline = response.choices[0].message.content.strip()
-        st.info("DEBUG: Outline generated successfully")
-    except Exception as e:
-        st.error(f"DEBUG: Error generating outline: {e}")
-        st.session_state.outline = "Error generating outline."
+    except Exception:
+        st.session_state.outline = "Error generating outline. Please try again."
     st.session_state.stage = "approve"
     st.rerun()
 
@@ -76,7 +70,6 @@ if st.session_state.stage == "outline":
 if st.session_state.stage == "approve":
     st.subheader("Proposed Book Outline (10 chapters × 20 sections)")
     st.markdown(st.session_state.outline)
-    st.info("DEBUG: Waiting for user approval")
     col1, col2 = st.columns(2)
     with col1:
         if st.button("✅ Yes, proceed to write the full book", type="primary"):
@@ -87,13 +80,17 @@ if st.session_state.stage == "approve":
             st.session_state.stage = "outline"
             st.rerun()
 
-# STAGE 3: Writing the book
+# STAGE 3: Write the book
 if st.session_state.stage == "writing":
     st.subheader("🔥 AI Army is writing the full book chapter by chapter...")
-    st.info("DEBUG: Starting book writing phase")
     tex_filename = "book.tex"
+    bib_filename = "references.bib"
+
     with open(tex_filename, "w") as f:
         f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{" + st.session_state.current_prompt + r"}\maketitle\begin{abstract}This book was written collaboratively by the AI Army.\end{abstract}")
+
+    with open(bib_filename, "w") as f:
+        f.write("@article{placeholder,\n  title = {Placeholder},\n  author = {AI Army},\n  year = {2026}\n}\n")
 
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -114,7 +111,7 @@ if st.session_state.stage == "writing":
                     f.write(f"\n\n\\section{{Chapter {chapter} - Section {section}}}\n{section_text}")
             except Exception:
                 pass
-            progress_bar.progress((chapter-1)*20 + section / (10*20))
+            progress_bar.progress(((chapter-1)*20 + section) / (10*20))
             time.sleep(0.03)
 
     st.success("✅ Full book has been written!")
@@ -126,9 +123,13 @@ if st.session_state.stage == "done":
     st.subheader("🎉 Book is complete!")
     with open("book.tex", "r") as f:
         final_tex = f.read()
+    with open("references.bib", "r") as f:
+        final_bib = f.read()
+
     col1, col2 = st.columns(2)
     with col1:
         st.download_button("📥 Download book.tex", final_tex, "book.tex")
-    st.info("DEBUG: Book writing finished - download button shown")
+    with col2:
+        st.download_button("📥 Download references.bib", final_bib, "references.bib")
 
-st.caption("💡 Left side shows only the latest 3 agents, 1 per line. Right side is fixed with its own scroll bar.")
+st.caption("💡 Left side shows only the latest 3 agents, 1 per line, fast-moving. Right side is fixed with its own scroll bar.")
