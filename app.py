@@ -10,7 +10,7 @@ st.set_page_config(page_title="1000 AI Agents Arena", layout="wide")
 st.markdown("""
 <style>
     .army-box { 
-        max-height: 220px; 
+        height: 220px; 
         overflow-y: hidden; 
         border: 1px solid #262730; 
         padding: 12px; 
@@ -38,7 +38,7 @@ if "current_prompt" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive LaTeX Builder")
-    st.markdown("**Version 28.0 - Only Latest 3 Agents Visible**")
+    st.markdown("**Version 29.0 - Only Latest 3 Agents (fixed box)**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -71,9 +71,9 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
     with col_left:
         st.subheader("🔥 AI Army Conversation (only latest 3 agents visible)")
-        army_container = st.container(height=220)
+        army_placeholder = st.empty()   # single placeholder that we update
         client = OpenAI()
-        latest_agents = []  # keeps ONLY the latest 3
+        latest_agents = []   # keeps only the latest 3
 
         def get_agent_response(i, round_num):
             persona = random.choice(PERSONAS)
@@ -98,10 +98,10 @@ if prompt := st.chat_input("Ask the swarm anything..."):
                 thinking, contribution, header = get_agent_response(i, round_num)
                 latest_agents.append(f"• {header} thinks: {thinking}")
                 if len(latest_agents) > 3:
-                    latest_agents.pop(0)  # remove oldest
+                    latest_agents.pop(0)   # remove oldest
 
-                with army_container:
-                    st.markdown("\n".join(latest_agents))
+                # Update the placeholder with exactly the latest 3 agents
+                army_placeholder.markdown("\n".join(latest_agents))
                 
                 with open(tex_filename, "a") as f:
                     f.write("\n\n" + contribution)
@@ -119,4 +119,4 @@ if prompt := st.chat_input("Ask the swarm anything..."):
 
     st.session_state.messages.append({"role": "assistant", "content": f"**AI Army conversation completed**"})
 
-st.caption("💡 Left box shows ONLY the latest 3 agents. Right LaTeX box is fixed with its own scroll bar.")
+st.caption("💡 Left box now shows ONLY the latest 3 agents and never scrolls. Right LaTeX box is fixed with its own scroll bar.")
