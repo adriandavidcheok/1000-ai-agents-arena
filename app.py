@@ -14,17 +14,19 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+if "stage" not in st.session_state:
+    st.session_state.stage = "idle"
 if "current_prompt" not in st.session_state:
     st.session_state.current_prompt = None
 if "outline" not in st.session_state:
     st.session_state.outline = None
-if "stage" not in st.session_state:
-    st.session_state.stage = "idle"
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 34.0 - Exact 6-Step Workflow + Fast 3-Line Army**")
+    st.markdown("**Version 35.0 - Exact 6-Step Workflow + Fast 3-Line Army**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -39,7 +41,7 @@ with st.sidebar:
 
 PERSONAS = ["LaTeX Architect", "Scientific Writer", "Math LaTeX Specialist", "Document Engineer", "Research Coder", "Critic", "Optimist", "Devil's Advocate"] * 60
 
-for msg in st.session_state.messages if "messages" in st.session_state else []:
+for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
@@ -49,20 +51,39 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.stage = "outline"
     st.rerun()
 
-# STAGE 1: Generate Outline
+# STAGE 1: Generate Outline with live conversation
 if st.session_state.stage == "outline":
     st.subheader("🔥 AI Army is creating the book outline (10 chapters × 20 sections)")
+    army_placeholder = st.empty()
     client = OpenAI()
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "system", "content": f"Create a detailed book outline for: {st.session_state.current_prompt}. Exactly 10 chapters, each with exactly 20 sections. Output clean markdown with clear headings."}],
-            temperature=0.8,
-            max_tokens=1600
-        )
-        st.session_state.outline = response.choices[0].message.content.strip()
-    except Exception:
-        st.session_state.outline = "Error generating outline. Please try again."
+    latest_agents = []
+    outline_text = ""
+
+    def get_outline_contribution(i):
+        persona = random.choice(PERSONAS)
+        agent_id = f"Agent #{random.randint(1,9999)}"
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "system", "content": f"You are {persona}. Create part of a detailed book outline for: {st.session_state.current_prompt}. Exactly 10 chapters, each with exactly 20 sections. Output clean markdown."}],
+                temperature=0.8,
+                max_tokens=800
+            )
+            contribution = response.choices[0].message.content.strip()
+            return f"• {agent_id} — {persona} thinks: Generating outline part...", contribution
+        except Exception:
+            return f"• {agent_id} — Error", ""
+
+    for i in range(num_agents):
+        thinking, contribution = get_outline_contribution(i)
+        latest_agents.append(thinking)
+        if len(latest_agents) > 3:
+            latest_agents.pop(0)
+        army_placeholder.markdown("\n\n".join(latest_agents))
+        outline_text += contribution + "\n\n"
+        time.sleep(0.03)
+
+    st.session_state.outline = outline_text
     st.session_state.stage = "approve"
     st.rerun()
 
@@ -83,6 +104,8 @@ if st.session_state.stage == "approve":
 # STAGE 3: Write the book
 if st.session_state.stage == "writing":
     st.subheader("🔥 AI Army is writing the full book chapter by chapter...")
+    army_placeholder = st.empty()
+    latest_agents = []
     tex_filename = "book.tex"
     bib_filename = "references.bib"
 
@@ -99,6 +122,13 @@ if st.session_state.stage == "writing":
         status_text.text(f"Writing Chapter {chapter} of 10...")
         for section in range(1, 21):
             persona = random.choice(PERSONAS)
+            agent_id = f"Agent #{random.randint(1,9999)}"
+            thinking = f"• {agent_id} — {persona} thinks: Writing section {section} of chapter {chapter}"
+            latest_agents.append(thinking)
+            if len(latest_agents) > 3:
+                latest_agents.pop(0)
+            army_placeholder.markdown("\n\n".join(latest_agents))
+
             try:
                 response = client.chat.completions.create(
                     model=model,
@@ -111,7 +141,7 @@ if st.session_state.stage == "writing":
                     f.write(f"\n\n\\section{{Chapter {chapter} - Section {section}}}\n{section_text}")
             except Exception:
                 pass
-            progress_bar.progress(((chapter-1)*20 + section) / (10*20))
+            progress_bar.progress((chapter-1)*20 + section / (10*20))
             time.sleep(0.03)
 
     st.success("✅ Full book has been written!")
