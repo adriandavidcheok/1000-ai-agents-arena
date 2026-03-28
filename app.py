@@ -26,7 +26,7 @@ if "messages" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 37.0 - Exact 6-Step Workflow + Fast 3-Line Army**")
+    st.markdown("**Version 38.0 - Constant Activity + Fast 3-Line Army**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -51,34 +51,35 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.stage = "outline"
     st.rerun()
 
-# STAGE 1: Generate Outline with lively conversation
+# STAGE 1: Generate Outline with CONSTANT lively conversation
 if st.session_state.stage == "outline":
     st.subheader("🔥 AI Army is creating the book outline (10 chapters × 20 sections)")
     army_placeholder = st.empty()
     client = OpenAI()
     latest_agents = []
 
-    def get_fake_thought():
+    def get_thought():
         persona = random.choice(PERSONAS)
         agent_id = f"Agent #{random.randint(1,9999)}"
-        thoughts = [
-            f"Considering the main themes for Chapter {random.randint(1,10)}...",
-            f"Thinking about how to structure Section {random.randint(1,20)} in detail...",
-            f"Planning to add historical context and mathematical explanations...",
-            f"Ensuring the section flows naturally and adds new value...",
-            f"Reviewing previous sections to avoid any repetition..."
+        ideas = [
+            f"Considering how to make Chapter {random.randint(1,10)} flow naturally...",
+            f"Planning to add historical context and mathematical explanations for Section {random.randint(1,20)}...",
+            f"Thinking about how to structure the section with clear LaTeX formatting...",
+            f"Ensuring the content is unique and adds new value without repetition...",
+            f"Reviewing previous sections to maintain perfect flow and consistency..."
         ]
-        thinking = f"• {agent_id} — {persona} thinks: {random.choice(thoughts)}"
-        return thinking
+        return f"• {agent_id} — {persona} thinks: {random.choice(ideas)}"
 
-    for i in range(num_agents):
-        thought = get_fake_thought()
+    # LONG lively loop so the conversation never stops
+    for i in range(80):
+        thought = get_thought()
         latest_agents.append(thought)
         if len(latest_agents) > 3:
             latest_agents.pop(0)
         army_placeholder.markdown("\n\n".join(latest_agents))
         time.sleep(0.15)
 
+    # Single fast API call for the final outline
     try:
         response = client.chat.completions.create(
             model=model,
@@ -148,7 +149,7 @@ if st.session_state.stage == "writing":
                     f.write(f"\n\n\\section{{Chapter {chapter} - Section {section}}}\n{section_text}")
             except Exception:
                 pass
-            progress_bar.progress((chapter-1)*20 + section / (10*20))
+            progress_bar.progress(min(1.0, (chapter-1)*20 + section / (10*20)))
 
     st.success("✅ Full book has been written!")
     st.session_state.stage = "done"
