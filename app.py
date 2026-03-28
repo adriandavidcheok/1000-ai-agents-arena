@@ -13,7 +13,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session state
 if "stage" not in st.session_state:
     st.session_state.stage = "idle"
 if "current_prompt" not in st.session_state:
@@ -22,13 +21,13 @@ if "outline" not in st.session_state:
     st.session_state.outline = None
 if "tex_content" not in st.session_state:
     st.session_state.tex_content = ""
-if "messages" not in st.session_state:   # ← This line fixes your error
+if "messages" not in st.session_state:
     st.session_state.messages = []
 
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 41.0 - Live LaTeX Preview + Constant Activity**")
+    st.markdown("**Version 42.0 - Live LaTeX Preview + Constant Activity**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -89,7 +88,7 @@ if st.session_state.stage == "outline":
     st.session_state.stage = "approve"
     st.rerun()
 
-# STAGE 2: Approve
+# STAGE 2: Approve Outline
 if st.session_state.stage == "approve":
     st.subheader("Proposed Book Outline")
     st.markdown(st.session_state.outline)
@@ -116,6 +115,7 @@ if st.session_state.stage == "writing":
         f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{" + st.session_state.current_prompt + r"}\maketitle\begin{abstract}This book was written collaboratively by the AI Army.\end{abstract}")
 
     st.session_state.tex_content = ""
+    latest_agents = []   # ← Fixed here (this was causing the NameError)
 
     progress_bar = st.progress(0)
     status_text = st.empty()
