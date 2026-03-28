@@ -26,7 +26,7 @@ if "messages" not in st.session_state:
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 35.0 - Exact 6-Step Workflow + Fast 3-Line Army**")
+    st.markdown("**Version 36.0 - Fast Outline + Fast 3-Line Army**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -51,39 +51,34 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.stage = "outline"
     st.rerun()
 
-# STAGE 1: Generate Outline with live conversation
+# STAGE 1: Generate Outline (single fast call)
 if st.session_state.stage == "outline":
     st.subheader("🔥 AI Army is creating the book outline (10 chapters × 20 sections)")
     army_placeholder = st.empty()
     client = OpenAI()
-    latest_agents = []
-    outline_text = ""
 
-    def get_outline_contribution(i):
+    # Fake lively conversation while waiting
+    fake_thoughts = []
+    for i in range(40):   # fast fake activity
         persona = random.choice(PERSONAS)
-        agent_id = f"Agent #{random.randint(1,9999)}"
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "system", "content": f"You are {persona}. Create part of a detailed book outline for: {st.session_state.current_prompt}. Exactly 10 chapters, each with exactly 20 sections. Output clean markdown."}],
-                temperature=0.8,
-                max_tokens=800
-            )
-            contribution = response.choices[0].message.content.strip()
-            return f"• {agent_id} — {persona} thinks: Generating outline part...", contribution
-        except Exception:
-            return f"• {agent_id} — Error", ""
+        fake_thoughts.append(f"• Agent #{random.randint(1000,9999)} — {persona} thinks: Working on outline part...")
+        if len(fake_thoughts) > 3:
+            fake_thoughts.pop(0)
+        army_placeholder.markdown("\n\n".join(fake_thoughts))
+        time.sleep(0.2)
 
-    for i in range(num_agents):
-        thinking, contribution = get_outline_contribution(i)
-        latest_agents.append(thinking)
-        if len(latest_agents) > 3:
-            latest_agents.pop(0)
-        army_placeholder.markdown("\n\n".join(latest_agents))
-        outline_text += contribution + "\n\n"
-        time.sleep(0.03)
+    # Real outline generation (single call)
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": f"Create a detailed book outline for: {st.session_state.current_prompt}. Exactly 10 chapters, each with exactly 20 sections. Output clean markdown with clear headings."}],
+            temperature=0.8,
+            max_tokens=1600
+        )
+        st.session_state.outline = response.choices[0].message.content.strip()
+    except Exception:
+        st.session_state.outline = "Error generating outline. Please try again."
 
-    st.session_state.outline = outline_text
     st.session_state.stage = "approve"
     st.rerun()
 
