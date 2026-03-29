@@ -31,7 +31,7 @@ if "current_section" not in st.session_state: st.session_state.current_section =
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 72.0 - Heavy debug messages + correct indentation**")
+    st.markdown("**Version 72.0 - Full writing loop restored + heavy debug**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -204,9 +204,32 @@ if st.session_state.stage == "writing":
         chapter_tex = ""
         for section in range(st.session_state.current_section, 21):
             st.info(f"   → Starting Section {section} of Chapter {chapter}")
-            # (5 agents + merger code here – same as before)
-            # ... (the full writing logic from previous versions is included in your file)
-            # After the section is ready:
+            drafts = []
+            latest_agents = []
+            for j in range(5):
+                persona = random.choice(PERSONAS)
+                agent_id = f"Agent #{random.randint(1,9999)}"
+                thinking = f"• {agent_id} — {persona} thinks: Drafting unique content with many citations for section {section}..."
+                latest_agents.append(thinking)
+                if len(latest_agents) > 3: latest_agents.pop(0)
+                army_placeholder.markdown("\n\n".join(latest_agents))
+                time.sleep(0.03)
+                try:
+                    resp = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG detailed section {section} of chapter {chapter} about {st.session_state.current_prompt}. Include AS MANY relevant academic citations as possible using \\cite{{key}}. NEVER repeat anything from previous sections. Respond with ONLY LaTeX code."}], temperature=0.8, **get_max_tokens_kw(model, 2500))
+                    drafts.append(resp.choices[0].message.content.strip())
+                except: pass
+            st.info(f"   → 5 drafts completed for Section {section} — merging now...")
+            synth_prompt = f"""Combine these 5 drafts into ONE long, detailed, NON-REPETITIVE LaTeX section.
+Include AS MANY relevant academic citations as possible using \\cite{{key}}.
+NEVER repeat any concept, fact, phrase, or idea that has appeared in ANY previous section.
+Previous sections summary: {st.session_state.previous_summary}
+Output ONLY LaTeX code.\n\n""" + "\n\n---\n\n".join(drafts)
+            try:
+                synth = client.chat.completions.create(model=model, messages=[{"role": "system", "content": synth_prompt}], temperature=0.7, **get_max_tokens_kw(model, 3500))
+                section_text = synth.choices[0].message.content.strip()
+            except:
+                section_text = drafts[0] if drafts else ""
+            st.session_state.previous_summary += f"Chapter {chapter} Section {section}: {section_text[:500]}...\n"
             chapter_tex += f"\n\n\\section{{Chapter {chapter} - Section {section}}}\n{section_text}"
             for line in section_text.split("\n"):
                 if line.strip():
@@ -216,10 +239,9 @@ if st.session_state.stage == "writing":
             st.session_state.current_section = section + 1
         st.session_state.current_section = 1
 
-        # Desktop functions + debug messages (as requested)
         st.info(f"Applying ALL desktop functions to Chapter {chapter}…")
         st.info("→ Running to_ascii()")
-        clean_chapter_tex = to_ascii(final_chapter_tex)
+        clean_chapter_tex = to_ascii(chapter_tex)
         st.info("→ Running sanitize_latex_output_for_tex()")
         clean_chapter_tex = sanitize_latex_output_for_tex(clean_chapter_tex)
         st.info("→ Running remove_robotic_paragraph_openers()")
@@ -228,7 +250,6 @@ if st.session_state.stage == "writing":
         clean_chapter_tex = ensure_subsection_ends_cleanly(client, model, clean_chapter_tex)
         st.success(f"Chapter {chapter} fully sanitized")
 
-        # Save and show download buttons (unchanged)
         chapter_tex_filename = f"chapter_{chapter}.tex"
         with open(chapter_tex_filename, "w") as f:
             f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{Chapter " + str(chapter) + " - " + st.session_state.current_prompt + r"}\maketitle" + clean_chapter_tex + r"\end{document}")
@@ -237,6 +258,7 @@ if st.session_state.stage == "writing":
             bib_content = f.read()
         with open(bib_filename, "w") as f:
             f.write(bib_content)
+
         st.success(f"✅ Chapter {chapter} finished and saved!")
         col1, col2 = st.columns(2)
         with col1:
@@ -245,6 +267,11 @@ if st.session_state.stage == "writing":
         with col2:
             with open(bib_filename, "r") as f:
                 st.download_button(f"📥 Download Chapter {chapter}.bib", f.read(), bib_filename)
+
+        for line in bib_content.split("\n"):
+            if line.strip():
+                bib_preview.code(line, language="bibtex")
+                time.sleep(0.08)
 
     st.success("✅ Full book has been written!")
     st.session_state.stage = "done"
@@ -270,4 +297,4 @@ if st.session_state.stage == "done":
             if os.path.exists(bib_file):
                 with open(bib_file, "r") as f: st.download_button(f"Chapter {ch}.bib", f.read(), bib_file)
 
-st.caption("💡 Heavy debug messages added so you can see exactly where the app is")
+st.caption("💡 Heavy debug messages + full writing loop restored")
