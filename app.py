@@ -31,7 +31,7 @@ if "current_section" not in st.session_state: st.session_state.current_section =
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 76.0 - Reviewer & Citation Handler run after EVERY section + visible messages**")
+    st.markdown("**Version 77.0 - Strict Alan Turing content + full section title in debug**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -123,9 +123,8 @@ if uploaded_files:
         background_corpus += read_uploaded_file(file) + "\n\n"
     st.sidebar.success(f"Loaded {len(uploaded_files)} background documents")
 
-# STAGE 1 & 2 (outline) unchanged
+# STAGE 1 & 2 unchanged
 if st.session_state.stage == "outline":
-    # (same robust outline code as before)
     with col_left:
         st.subheader("🔥 AI Army is creating the book outline (10 chapters × 20 sections)")
         st.markdown('<div class="pacman-container"><span class="pacman">🟡</span> <span style="color:#ffcc00; font-weight:bold;">The AI Army is hard at work creating your outline...</span></div>', unsafe_allow_html=True)
@@ -180,7 +179,7 @@ if st.session_state.stage == "approve":
             st.session_state.stage = "outline"
             st.rerun()
 
-# STAGE 3: Writing (temporary stop after Chapter 1 Section 1 + agents after every section)
+# STAGE 3: Writing (temporary stop after Chapter 1 Section 1)
 if st.session_state.stage == "writing":
     st.info("✅ ENTERED WRITING STAGE")
     with col_left:
@@ -196,13 +195,15 @@ if st.session_state.stage == "writing":
     progress_bar = st.progress(0)
     status_text = st.empty()
 
-    # TEMPORARY DEBUG: only do Chapter 1, Section 1
+    # TEMPORARY DEBUG STOP: only Chapter 1, Section 1
     chapter = 1
     section = 1
     st.info(f"🚀 STARTING CHAPTER {chapter} OF 10")
     status_text.text(f"Writing Chapter {chapter} of 10...")
 
-    st.info(f"**Currently writing: Chapter {chapter} - Section {section}**")
+    # FULL SECTION TITLE DEBUG LINE (exactly as you asked)
+    st.info(f"**CURRENTLY WRITING FULL SECTION TITLE: Chapter {chapter} - Section {section}**")
+
     drafts = []
     latest_agents = []
     for j in range(5):
@@ -218,7 +219,12 @@ if st.session_state.stage == "writing":
             drafts.append(resp.choices[0].message.content.strip())
         except: pass
     st.info(f"   → 5 drafts completed for Section {section} — merging now...")
+
+    # EXTREMELY STRICT SYNTHESIZER PROMPT
     synth_prompt = f"""Combine these 5 drafts into ONE long, detailed, NON-REPETITIVE LaTeX section.
+THIS SECTION TITLE IS: Chapter {chapter} - Section {section}
+You MUST write ONLY about Alan Turing under this exact section title.
+Do not deviate to general AI, renewable energy, or any other subject.
 Include AS MANY relevant academic citations as possible using \\cite{{key}}.
 NEVER repeat any concept, fact, phrase, or idea that has appeared in ANY previous section.
 Previous sections summary: {st.session_state.previous_summary}
@@ -235,7 +241,7 @@ Output ONLY LaTeX code.\n\n""" + "\n\n---\n\n".join(drafts)
             latex_preview.code(f"\\section{{Chapter {chapter} - Section {section}}}\n{line.strip()}", language="latex")
             time.sleep(0.08)
 
-    # === AGENTS AFTER EVERY SECTION ===
+    # Agents after the section
     st.info("**Running Chapter Reviewer Agent to remove any duplication...**")
     reviewer_prompt = f"""You are the Chapter Reviewer Agent.
 Scan the section below and REMOVE ALL repetitions (concepts, facts, phrases, paragraphs).
@@ -271,7 +277,6 @@ Section content:\n{section_text}"""
     clean_section = remove_robotic_paragraph_openers(clean_section)
     clean_section = ensure_subsection_ends_cleanly(client, model, clean_section)
 
-    # Save files
     chapter_tex_filename = "chapter_1.tex"
     with open(chapter_tex_filename, "w") as f:
         f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{Chapter 1 - " + st.session_state.current_prompt + r"}\maketitle" + clean_section + r"\end{document}")
@@ -283,7 +288,7 @@ Section content:\n{section_text}"""
         f.write(bib_content)
 
     st.success("✅ STOPPED AFTER CHAPTER 1 SECTION 1 FOR DEBUG CHECK")
-    st.info("Download the files below and check them. When you are happy, tell me and I will remove the temporary stop and continue with all sections.")
+    st.info("Download the files below and check them. When you are happy, tell me and I will remove the temporary stop.")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -300,4 +305,4 @@ Section content:\n{section_text}"""
 
     st.stop()   # Temporary stop here
 
-st.caption("💡 Reviewer & Citation Handler now run after every section with visible messages")
+st.caption("💡 Full section title shown in debug • Reviewer & Citation Handler after every section")
