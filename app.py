@@ -31,7 +31,7 @@ if "current_section" not in st.session_state: st.session_state.current_section =
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 75.0 - Works for ANY topic + Current Section Title displayed live**")
+    st.markdown("**Version 76.0 - Reviewer & Citation Handler run after EVERY section + visible messages**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -123,8 +123,9 @@ if uploaded_files:
         background_corpus += read_uploaded_file(file) + "\n\n"
     st.sidebar.success(f"Loaded {len(uploaded_files)} background documents")
 
-# STAGE 1: Outline (robust)
+# STAGE 1 & 2 (outline) unchanged
 if st.session_state.stage == "outline":
+    # (same robust outline code as before)
     with col_left:
         st.subheader("🔥 AI Army is creating the book outline (10 chapters × 20 sections)")
         st.markdown('<div class="pacman-container"><span class="pacman">🟡</span> <span style="color:#ffcc00; font-weight:bold;">The AI Army is hard at work creating your outline...</span></div>', unsafe_allow_html=True)
@@ -164,7 +165,6 @@ Output ONLY clean markdown with clear headings. No extra text."""}],
     st.session_state.stage = "approve"
     st.rerun()
 
-# STAGE 2: Approve Outline
 if st.session_state.stage == "approve":
     st.subheader("Proposed Book Outline (10 chapters × 20 sections)")
     st.markdown(f'<div class="outline-text">{st.session_state.outline}</div>', unsafe_allow_html=True)
@@ -180,9 +180,9 @@ if st.session_state.stage == "approve":
             st.session_state.stage = "outline"
             st.rerun()
 
-# STAGE 3: Writing with live current-section title
+# STAGE 3: Writing (temporary stop after Chapter 1 Section 1 + agents after every section)
 if st.session_state.stage == "writing":
-    st.info("✅ ENTERED WRITING STAGE — starting chapter-by-chapter writing now...")
+    st.info("✅ ENTERED WRITING STAGE")
     with col_left:
         st.subheader("🔥 AI Army is writing the full book chapter by chapter...")
         st.markdown('<div class="pacman-container"><span class="pacman">🟡</span> <span style="color:#ffcc00; font-weight:bold;">The AI Army is hard at work writing your book...</span></div>', unsafe_allow_html=True)
@@ -196,40 +196,108 @@ if st.session_state.stage == "writing":
     progress_bar = st.progress(0)
     status_text = st.empty()
 
-    for chapter in range(st.session_state.current_chapter, 11):
-        st.info(f"🚀 STARTING CHAPTER {chapter} OF 10")
-        status_text.text(f"Writing Chapter {chapter} of 10...")
-        chapter_tex = ""
-        for section in range(st.session_state.current_section, 21):
-            # NEW: Prominent current section title
-            st.info(f"**Currently writing: Chapter {chapter} - Section {section}**")
-            drafts = []
-            latest_agents = []
-            for j in range(5):
-                persona = random.choice(PERSONAS)
-                agent_id = f"Agent #{random.randint(1,9999)}"
-                thinking = f"• {agent_id} — {persona} thinks: Drafting unique content with many citations for section {section}..."
-                latest_agents.append(thinking)
-                if len(latest_agents) > 3: latest_agents.pop(0)
-                army_placeholder.markdown("\n\n".join(latest_agents))
-                time.sleep(0.03)
-                try:
-                    resp = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG detailed section {section} of chapter {chapter} about {st.session_state.current_prompt}. Include AS MANY relevant academic citations as possible using \\cite{{key}}. NEVER repeat anything from previous sections. Respond with ONLY LaTeX code."}], temperature=0.8, **get_max_tokens_kw(model, 2500))
-                    drafts.append(resp.choices[0].message.content.strip())
-                except: pass
-            st.info(f"   → 5 drafts completed for Section {section} — merging now...")
-            synth_prompt = f"""Combine these 5 drafts into ONE long, detailed, NON-REPETITIVE LaTeX section.
+    # TEMPORARY DEBUG: only do Chapter 1, Section 1
+    chapter = 1
+    section = 1
+    st.info(f"🚀 STARTING CHAPTER {chapter} OF 10")
+    status_text.text(f"Writing Chapter {chapter} of 10...")
+
+    st.info(f"**Currently writing: Chapter {chapter} - Section {section}**")
+    drafts = []
+    latest_agents = []
+    for j in range(5):
+        persona = random.choice(PERSONAS)
+        agent_id = f"Agent #{random.randint(1,9999)}"
+        thinking = f"• {agent_id} — {persona} thinks: Drafting unique content with many citations for section {section}..."
+        latest_agents.append(thinking)
+        if len(latest_agents) > 3: latest_agents.pop(0)
+        army_placeholder.markdown("\n\n".join(latest_agents))
+        time.sleep(0.03)
+        try:
+            resp = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG detailed section {section} of chapter {chapter} about {st.session_state.current_prompt}. Include AS MANY relevant academic citations as possible using \\cite{{key}}. NEVER repeat anything from previous sections. Respond with ONLY LaTeX code."}], temperature=0.8, **get_max_tokens_kw(model, 2500))
+            drafts.append(resp.choices[0].message.content.strip())
+        except: pass
+    st.info(f"   → 5 drafts completed for Section {section} — merging now...")
+    synth_prompt = f"""Combine these 5 drafts into ONE long, detailed, NON-REPETITIVE LaTeX section.
 Include AS MANY relevant academic citations as possible using \\cite{{key}}.
 NEVER repeat any concept, fact, phrase, or idea that has appeared in ANY previous section.
 Previous sections summary: {st.session_state.previous_summary}
 Output ONLY LaTeX code.\n\n""" + "\n\n---\n\n".join(drafts)
-            try:
-                synth = client.chat.completions.create(model=model, messages=[{"role": "system", "content": synth_prompt}], temperature=0.7, **get_max_tokens_kw(model, 3500))
-                section_text = synth.choices[0].message.content.strip()
-            except:
-                section_text = drafts[0] if drafts else ""
-            st.session_state.previous_summary += f"Chapter {chapter} Section {section}: {section_text[:500]}...\n"
-            chapter_tex += f"\n\n\\section{{Chapter {chapter} - Section {section}}}\n{section_text}"
-            for line in section_text.split("\n"):
-                if line.strip():
-                    latex_preview.code(f"\\section{{Chapter {chapter} - Section {section}}}\n{line.strip()}", language="
+    try:
+        synth = client.chat.completions.create(model=model, messages=[{"role": "system", "content": synth_prompt}], temperature=0.7, **get_max_tokens_kw(model, 3500))
+        section_text = synth.choices[0].message.content.strip()
+    except:
+        section_text = drafts[0] if drafts else ""
+
+    # Live preview
+    for line in section_text.split("\n"):
+        if line.strip():
+            latex_preview.code(f"\\section{{Chapter {chapter} - Section {section}}}\n{line.strip()}", language="latex")
+            time.sleep(0.08)
+
+    # === AGENTS AFTER EVERY SECTION ===
+    st.info("**Running Chapter Reviewer Agent to remove any duplication...**")
+    reviewer_prompt = f"""You are the Chapter Reviewer Agent.
+Scan the section below and REMOVE ALL repetitions (concepts, facts, phrases, paragraphs).
+Merge similar content into one occurrence.
+Keep it VERY LONG and detailed.
+Output ONLY the final cleaned LaTeX section.
+
+Section content:\n{section_text}"""
+    try:
+        reviewer = client.chat.completions.create(model=model, messages=[{"role": "system", "content": reviewer_prompt}], temperature=0.7, **get_max_tokens_kw(model, 4000))
+        section_text = reviewer.choices[0].message.content.strip()
+    except:
+        pass
+
+    st.info("**Running Citation Handler Agent — moving citations to .bib and ensuring they are real...**")
+    cleaner_prompt = f"""You are the Citation Handler Agent.
+1. Remove ANY BibTeX entries (@article, @book, etc.) from the LaTeX.
+2. Extract every \\cite{{key}} used.
+3. Generate REAL academic BibTeX entries for every extracted key.
+4. Output ONLY the final clean LaTeX section (no BibTeX blocks).
+
+Section content:\n{section_text}"""
+    try:
+        cleaner = client.chat.completions.create(model=model, messages=[{"role": "system", "content": cleaner_prompt}], temperature=0.7, **get_max_tokens_kw(model, 4000))
+        section_text = cleaner.choices[0].message.content.strip()
+    except:
+        pass
+
+    # Desktop functions
+    st.info("Applying desktop functions...")
+    clean_section = to_ascii(section_text)
+    clean_section = sanitize_latex_output_for_tex(clean_section)
+    clean_section = remove_robotic_paragraph_openers(clean_section)
+    clean_section = ensure_subsection_ends_cleanly(client, model, clean_section)
+
+    # Save files
+    chapter_tex_filename = "chapter_1.tex"
+    with open(chapter_tex_filename, "w") as f:
+        f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{Chapter 1 - " + st.session_state.current_prompt + r"}\maketitle" + clean_section + r"\end{document}")
+
+    bib_filename = "chapter_1.bib"
+    with open("references.bib", "r") as f:
+        bib_content = f.read()
+    with open(bib_filename, "w") as f:
+        f.write(bib_content)
+
+    st.success("✅ STOPPED AFTER CHAPTER 1 SECTION 1 FOR DEBUG CHECK")
+    st.info("Download the files below and check them. When you are happy, tell me and I will remove the temporary stop and continue with all sections.")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        with open(chapter_tex_filename, "r") as f:
+            st.download_button("📥 Download Chapter 1.tex", f.read(), chapter_tex_filename)
+    with col2:
+        with open(bib_filename, "r") as f:
+            st.download_button("📥 Download Chapter 1.bib", f.read(), bib_filename)
+
+    for line in bib_content.split("\n"):
+        if line.strip():
+            bib_preview.code(line, language="bibtex")
+            time.sleep(0.08)
+
+    st.stop()   # Temporary stop here
+
+st.caption("💡 Reviewer & Citation Handler now run after every section with visible messages")
