@@ -31,7 +31,7 @@ if "current_section" not in st.session_state: st.session_state.current_section =
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 72.0 - Full writing loop restored + heavy debug**")
+    st.markdown("**Version 75.0 - Works for ANY topic + Current Section Title displayed live**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -59,14 +59,12 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.current_section = 1
     st.rerun()
 
-# Helper for GPT-5.4
 def get_max_tokens_kw(model_name, tokens):
     if model_name.startswith("gpt-5"):
         return {"max_completion_tokens": tokens}
     else:
         return {"max_tokens": tokens}
 
-# All original desktop functions
 def to_ascii(text: str) -> str:
     if text is None: return ""
     return text.encode("ascii", "ignore").decode("ascii")
@@ -125,7 +123,7 @@ if uploaded_files:
         background_corpus += read_uploaded_file(file) + "\n\n"
     st.sidebar.success(f"Loaded {len(uploaded_files)} background documents")
 
-# STAGE 1: Outline
+# STAGE 1: Outline (robust)
 if st.session_state.stage == "outline":
     with col_left:
         st.subheader("🔥 AI Army is creating the book outline (10 chapters × 20 sections)")
@@ -182,7 +180,7 @@ if st.session_state.stage == "approve":
             st.session_state.stage = "outline"
             st.rerun()
 
-# STAGE 3: Writing with heavy debug
+# STAGE 3: Writing with live current-section title
 if st.session_state.stage == "writing":
     st.info("✅ ENTERED WRITING STAGE — starting chapter-by-chapter writing now...")
     with col_left:
@@ -203,7 +201,8 @@ if st.session_state.stage == "writing":
         status_text.text(f"Writing Chapter {chapter} of 10...")
         chapter_tex = ""
         for section in range(st.session_state.current_section, 21):
-            st.info(f"   → Starting Section {section} of Chapter {chapter}")
+            # NEW: Prominent current section title
+            st.info(f"**Currently writing: Chapter {chapter} - Section {section}**")
             drafts = []
             latest_agents = []
             for j in range(5):
@@ -233,68 +232,4 @@ Output ONLY LaTeX code.\n\n""" + "\n\n---\n\n".join(drafts)
             chapter_tex += f"\n\n\\section{{Chapter {chapter} - Section {section}}}\n{section_text}"
             for line in section_text.split("\n"):
                 if line.strip():
-                    latex_preview.code(f"\\section{{Chapter {chapter} - Section {section}}}\n{line.strip()}", language="latex")
-                    time.sleep(0.08)
-            progress_bar.progress(min(1.0, (chapter-1)*20 + section / (10*20)))
-            st.session_state.current_section = section + 1
-        st.session_state.current_section = 1
-
-        st.info(f"Applying ALL desktop functions to Chapter {chapter}…")
-        st.info("→ Running to_ascii()")
-        clean_chapter_tex = to_ascii(chapter_tex)
-        st.info("→ Running sanitize_latex_output_for_tex()")
-        clean_chapter_tex = sanitize_latex_output_for_tex(clean_chapter_tex)
-        st.info("→ Running remove_robotic_paragraph_openers()")
-        clean_chapter_tex = remove_robotic_paragraph_openers(clean_chapter_tex)
-        st.info("→ Running ensure_subsection_ends_cleanly() — making sure every section ends with a proper sentence")
-        clean_chapter_tex = ensure_subsection_ends_cleanly(client, model, clean_chapter_tex)
-        st.success(f"Chapter {chapter} fully sanitized")
-
-        chapter_tex_filename = f"chapter_{chapter}.tex"
-        with open(chapter_tex_filename, "w") as f:
-            f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{Chapter " + str(chapter) + " - " + st.session_state.current_prompt + r"}\maketitle" + clean_chapter_tex + r"\end{document}")
-        bib_filename = f"chapter_{chapter}.bib"
-        with open("references.bib", "r") as f:
-            bib_content = f.read()
-        with open(bib_filename, "w") as f:
-            f.write(bib_content)
-
-        st.success(f"✅ Chapter {chapter} finished and saved!")
-        col1, col2 = st.columns(2)
-        with col1:
-            with open(chapter_tex_filename, "r") as f:
-                st.download_button(f"📥 Download Chapter {chapter}.tex", f.read(), chapter_tex_filename)
-        with col2:
-            with open(bib_filename, "r") as f:
-                st.download_button(f"📥 Download Chapter {chapter}.bib", f.read(), bib_filename)
-
-        for line in bib_content.split("\n"):
-            if line.strip():
-                bib_preview.code(line, language="bibtex")
-                time.sleep(0.08)
-
-    st.success("✅ Full book has been written!")
-    st.session_state.stage = "done"
-    st.rerun()
-
-# STAGE 4: Done
-if st.session_state.stage == "done":
-    st.subheader("🎉 Book is complete! All 10 chapters ready")
-    with open("book.tex", "r") as f: full_tex = f.read()
-    with open("references.bib", "r") as f: full_bib = f.read()
-    col1, col2 = st.columns(2)
-    with col1: st.download_button("📥 Full book.tex", full_tex, "book.tex")
-    with col2: st.download_button("📥 Full references.bib", full_bib, "references.bib")
-    st.subheader("Individual Chapter Downloads")
-    for ch in range(1, 11):
-        tex_file = f"chapter_{ch}.tex"
-        bib_file = f"chapter_{ch}.bib"
-        col1, col2 = st.columns(2)
-        with col1:
-            if os.path.exists(tex_file):
-                with open(tex_file, "r") as f: st.download_button(f"Chapter {ch}.tex", f.read(), tex_file)
-        with col2:
-            if os.path.exists(bib_file):
-                with open(bib_file, "r") as f: st.download_button(f"Chapter {ch}.bib", f.read(), bib_file)
-
-st.caption("💡 Heavy debug messages + full writing loop restored")
+                    latex_preview.code(f"\\section{{Chapter {chapter} - Section {section}}}\n{line.strip()}", language="
