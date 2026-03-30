@@ -32,7 +32,7 @@ if "section_titles" not in st.session_state: st.session_state.section_titles = {
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 86.0 — GPT-5.4 is now the default (latest model confirmed)**")
+    st.markdown("**Version 88.0 — Exact cleaning functions shown on screen + 2 agents only**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -40,13 +40,11 @@ with st.sidebar:
     st.header("⚙️ Settings")
     api_key = st.text_input("OpenAI API Key", type="password", value=os.getenv("OPENAI_API_KEY", ""))
     if api_key: os.environ["OPENAI_API_KEY"] = api_key
-    model = st.selectbox("Model", ["gpt-5.4", "gpt-5.4-mini", "gpt-4o"], index=0)  # GPT-5.4 is now first
+    model = st.selectbox("Model", ["gpt-5.4", "gpt-5.4-mini", "gpt-4o"], index=0)
 
     st.header("📁 Background Documents")
     uploaded_files = st.file_uploader("Upload PDF, DOCX, TXT files", type=["pdf", "docx", "txt"], accept_multiple_files=True)
 
-PERSONAS = ["LaTeX Architect", "Scientific Writer", "Math LaTeX Specialist", "Document Engineer", "Research Coder", "Critical Reviewer", "Detailed Editor", "Storyteller"] * 60
-client = OpenAI(api_key=api_key) if api_key else None
 col_left, col_right = st.columns([3, 2])
 
 with col_left:
@@ -78,13 +76,15 @@ def parse_section_titles(outline_text):
 def get_max_tokens_kw(model_name, tokens):
     return {"max_completion_tokens": tokens} if model_name.startswith("gpt-5") else {"max_tokens": tokens}
 
-# Desktop functions
-def to_ascii(text: str) -> str: return text.encode("ascii", "ignore").decode("ascii") if text else ""
+def to_ascii(text: str) -> str:
+    return text.encode("ascii", "ignore").decode("ascii") if text else ""
+
 def sanitize_latex_output_for_tex(text: str) -> str:
     if not text: return ""
     ascii_text = to_ascii(text)
     patterns = [r'\\emph\{([^}]*)\}', r'\\textit\{([^}]*)\}', r'\\textbf\{([^}]*)\}', r'\\textsc\{([^}]*)\}', r'\\underline\{([^}]*)\}']
-    for pat in patterns: ascii_text = re.sub(pat, r'\1', ascii_text)
+    for pat in patterns:
+        ascii_text = re.sub(pat, r'\1', ascii_text)
     ascii_text = re.sub(r'^\s*\\section\{[^}]*\}\s*', '', ascii_text, flags=re.MULTILINE)
     ascii_text = re.sub(r'^\s*\\subsection\{[^}]*\}\s*', '', ascii_text, flags=re.MULTILINE)
     ascii_text = re.sub(r'(?<!\\)&', r'\\&', ascii_text)
@@ -92,6 +92,7 @@ def sanitize_latex_output_for_tex(text: str) -> str:
     ascii_text = re.sub(r'[ \t]+(\n)', r'\1', ascii_text)
     ascii_text = re.sub(r'\n{3,}', '\n\n', ascii_text)
     return ascii_text
+
 def remove_robotic_paragraph_openers(text: str) -> str:
     if not text: return text
     t = re.sub(r'\n{3,}', '\n\n', text)
@@ -100,14 +101,17 @@ def remove_robotic_paragraph_openers(text: str) -> str:
     opener_pattern = re.compile(r'^\s*(?:Firstly|First|Secondly|Second|Thirdly|Third|Finally|Lastly|In conclusion|To conclude|In summary|Overall|All in all)\s*(?:,|:)?\s+', flags=re.IGNORECASE)
     for p in paragraphs:
         p2 = opener_pattern.sub("", p, count=1).lstrip()
-        if p2 and p2[0].isalpha() and p2[0].islower(): p2 = p2[0].upper() + p2[1:]
+        if p2 and p2[0].isalpha() and p2[0].islower():
+            p2 = p2[0].upper() + p2[1:]
         cleaned.append(p2)
     return "\n\n".join(cleaned).strip() + "\n"
+
 def ensure_subsection_ends_cleanly(client, model, text: str) -> str:
     if re.search(r'[.!?]\s*$', text.strip()): return text
     st.info("→ ensure_subsection_ends_cleanly() fixing incomplete ending...")
     match = re.search(r'.*[.!?]', text, re.DOTALL)
     return match.group(0) if match else text
+
 def read_uploaded_file(uploaded_file):
     if uploaded_file.name.lower().endswith(".pdf"):
         reader = PyPDF2.PdfReader(BytesIO(uploaded_file.read()))
@@ -123,7 +127,6 @@ if uploaded_files:
     background_corpus = "".join(read_uploaded_file(f) + "\n\n" for f in uploaded_files)
     st.sidebar.success(f"Loaded {len(uploaded_files)} background documents")
 
-# STAGE 1: Outline
 if st.session_state.stage == "outline":
     with col_left:
         st.subheader("🔥 AI Army is creating the book outline")
@@ -167,10 +170,14 @@ Output EXACTLY in this format (nothing else):
     st.session_state.stage = "approve"
     st.rerun()
 
-# STAGE 2: Approve
 if st.session_state.stage == "approve":
     st.subheader("Proposed Book Outline")
     st.markdown(f'<div class="outline-text">{st.session_state.outline}</div>', unsafe_allow_html=True)
+    if st.session_state.outline:
+        with open("outline.txt", "w") as f:
+            f.write(st.session_state.outline)
+        with open("outline.txt", "r") as f:
+            st.download_button("📥 Download outline.txt", f.read(), "outline.txt")
     col1, col2 = st.columns(2)
     with col1:
         if st.button("✅ Yes, proceed to write the full book", type="primary"):
@@ -184,7 +191,6 @@ if st.session_state.stage == "approve":
             st.session_state.stage = "outline"
             st.rerun()
 
-# STAGE 3: Writing — FULLY EXPANDED
 if st.session_state.stage == "writing":
     st.info("✅ ENTERED WRITING STAGE")
     with col_left:
@@ -197,16 +203,16 @@ if st.session_state.stage == "writing":
         st.subheader("📜 Live BibTeX Preview (one line at a time)")
         bib_preview = st.empty()
 
-    chapter = 1
-    section = 1
+    chapter = st.session_state.current_chapter
+    section = st.session_state.current_section
     real_title = st.session_state.section_titles.get((chapter, section), f"Section {section}")
     st.info(f"**CURRENTLY WRITING FULL SECTION TITLE: Chapter {chapter} - Section {section} — {real_title}**")
 
+    agents = ["Professor at Harvard", "Professor at MIT"]
     drafts = []
     latest_agents = []
-    for j in range(5):
-        persona = random.choice(PERSONAS)
-        agent_id = f"Agent #{random.randint(1,9999)}"
+    for persona in agents:
+        agent_id = f"Agent #{random.randint(1000,9999)}"
         thinking = f"• {agent_id} — {persona} thinks: Drafting '{real_title}'..."
         latest_agents.append(thinking)
         if len(latest_agents) > 3: latest_agents.pop(0)
@@ -216,18 +222,14 @@ if st.session_state.stage == "writing":
             resp = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG detailed LaTeX section titled '{real_title}' about Alan Turing only. Include many \\cite{{key}}. Output ONLY LaTeX."}], temperature=0.8, **get_max_tokens_kw(model, 2500))
             drafts.append(resp.choices[0].message.content.strip())
         except Exception as e:
-            st.error(f"❌ Draft {j+1} failed: {str(e)}")
+            st.error(f"❌ {persona} failed: {str(e)}")
             drafts.append("")
-    st.info("✅ 5 drafts completed — running synthesizer...")
+    st.info("✅ 2 agents completed — running synthesizer...")
 
-    try:
-        synth_prompt = f"""Combine these 5 drafts into ONE long, detailed LaTeX section for the exact title '{real_title}'. Write ONLY about Alan Turing. NEVER return empty text. Output ONLY LaTeX.\n\n""" + "\n\n---\n\n".join(drafts)
-        synth = client.chat.completions.create(model=model, messages=[{"role": "system", "content": synth_prompt}], temperature=0.7, **get_max_tokens_kw(model, 3500))
-        section_text = synth.choices[0].message.content.strip()
-        st.info(f"🔍 RAW SYNTHESIZER OUTPUT — length: {len(section_text)} chars")
-    except Exception as e:
-        st.error(f"❌ Synthesizer failed: {str(e)}")
-        section_text = ""
+    synth_prompt = f"""Combine these 2 drafts into ONE long, detailed LaTeX section for the exact title '{real_title}'. Write ONLY about Alan Turing. NEVER return empty text. Output ONLY LaTeX.\n\n""" + "\n\n---\n\n".join(drafts)
+    synth = client.chat.completions.create(model=model, messages=[{"role": "system", "content": synth_prompt}], temperature=0.7, **get_max_tokens_kw(model, 3500))
+    section_text = synth.choices[0].message.content.strip()
+    st.info(f"🔍 RAW SYNTHESIZER OUTPUT — length: {len(section_text)} chars")
 
     if len(section_text) < 500:
         st.error("⚠️ Synthesizer returned nothing — HARD FALLBACK")
@@ -245,9 +247,13 @@ if st.session_state.stage == "writing":
     st.info(f"🔍 AFTER CITATION HANDLER — length: {len(section_text)} chars")
 
     st.info("Applying desktop sanitization functions...")
+    st.info("→ Running to_ascii()")
     clean_section = to_ascii(section_text)
+    st.info("→ Running sanitize_latex_output_for_tex()")
     clean_section = sanitize_latex_output_for_tex(clean_section)
+    st.info("→ Running remove_robotic_paragraph_openers()")
     clean_section = remove_robotic_paragraph_openers(clean_section)
+    st.info("→ Running ensure_subsection_ends_cleanly()")
     clean_section = ensure_subsection_ends_cleanly(client, model, clean_section)
     st.info(f"🔍 FINAL CLEAN SECTION — length: {len(clean_section)} chars")
 
@@ -255,29 +261,34 @@ if st.session_state.stage == "writing":
         st.error("⚠️ FINAL CONTENT STILL TOO SHORT — FORCING LAST FALLBACK")
         clean_section = r"\section{" + real_title + r"} Alan Turing was a brilliant British mathematician and computer scientist. This section explores " + real_title + r" in detail."
 
-    with open("chapter_1.tex", "w") as f:
-        f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{Chapter 1 - Alan Turing}\maketitle" + clean_section + r"\end{document}")
-    with open("chapter_1.bib", "w") as f:
+    filename_tex = f"chapter_{chapter}.tex"
+    with open(filename_tex, "a") as f:
+        if st.session_state.current_section == 1:
+            f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{Chapter " + str(chapter) + " - Alan Turing}\maketitle")
+        f.write(clean_section + "\n\n")
+
+    filename_bib = f"chapter_{chapter}.bib"
+    with open(filename_bib, "w") as f:
         f.write(open("references.bib", "r").read() if os.path.exists("references.bib") else "")
 
     for line in clean_section.split("\n"):
         if line.strip():
             latex_preview.code(f"\\section{{Chapter {chapter} - Section {section} — {real_title}}}\n{line.strip()}", language="latex")
             time.sleep(0.08)
-    for line in open("chapter_1.bib", "r").read().split("\n"):
+    for line in open(filename_bib, "r").read().split("\n"):
         if line.strip():
             bib_preview.code(line, language="bibtex")
             time.sleep(0.08)
 
-    st.success("✅ STOPPED AFTER CHAPTER 1 SECTION 1 FOR DEBUG CHECK")
-    col1, col2 = st.columns(2)
-    with col1:
-        with open("chapter_1.tex", "r") as f:
-            st.download_button("📥 Download Chapter 1.tex", f.read(), "chapter_1.tex")
-    with col2:
-        with open("chapter_1.bib", "r") as f:
-            st.download_button("📥 Download Chapter 1.bib", f.read(), "chapter_1.bib")
+    st.session_state.current_section += 1
+    if st.session_state.current_section > 20:
+        st.session_state.current_section = 1
+        st.session_state.current_chapter += 1
+    if st.session_state.current_chapter > 10:
+        st.session_state.stage = "done"
+    else:
+        st.rerun()
 
     st.stop()
 
-st.caption("💡 Version 86.0 — GPT-5.4 is now the default (latest model confirmed)")
+st.caption("💡 Version 88.0 — Exact cleaning functions shown on screen + full working code")
