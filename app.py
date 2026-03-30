@@ -32,7 +32,7 @@ if "section_titles" not in st.session_state: st.session_state.section_titles = {
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 84.0 — COMPLETE file, no missing code**")
+    st.markdown("**Version 86.0 — GPT-5.4 is now the default (latest model confirmed)**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -40,7 +40,7 @@ with st.sidebar:
     st.header("⚙️ Settings")
     api_key = st.text_input("OpenAI API Key", type="password", value=os.getenv("OPENAI_API_KEY", ""))
     if api_key: os.environ["OPENAI_API_KEY"] = api_key
-    model = st.selectbox("Model", ["gpt-5.4", "gpt-4o", "gpt-4o-mini"], index=0)
+    model = st.selectbox("Model", ["gpt-5.4", "gpt-5.4-mini", "gpt-4o"], index=0)  # GPT-5.4 is now first
 
     st.header("📁 Background Documents")
     uploaded_files = st.file_uploader("Upload PDF, DOCX, TXT files", type=["pdf", "docx", "txt"], accept_multiple_files=True)
@@ -78,8 +78,8 @@ def parse_section_titles(outline_text):
 def get_max_tokens_kw(model_name, tokens):
     return {"max_completion_tokens": tokens} if model_name.startswith("gpt-5") else {"max_tokens": tokens}
 
-def to_ascii(text: str) -> str: 
-    return text.encode("ascii", "ignore").decode("ascii") if text else ""
+# Desktop functions
+def to_ascii(text: str) -> str: return text.encode("ascii", "ignore").decode("ascii") if text else ""
 def sanitize_latex_output_for_tex(text: str) -> str:
     if not text: return ""
     ascii_text = to_ascii(text)
@@ -138,6 +138,7 @@ if st.session_state.stage == "outline":
             army_placeholder.markdown("\n\n".join(latest_agents))
             time.sleep(0.08)
         st.info("🚀 Starting outline generation...")
+        success = False
         for attempt in range(5):
             try:
                 response = client.chat.completions.create(
@@ -156,11 +157,12 @@ Output EXACTLY in this format (nothing else):
                 )
                 st.session_state.outline = response.choices[0].message.content.strip()
                 st.success("✅ Outline generated!")
+                success = True
                 break
             except Exception as e:
                 st.warning(f"Attempt {attempt+1} failed: {str(e)}")
                 time.sleep(2)
-        else:
+        if not success:
             st.session_state.outline = "# Hard Fallback Outline\n## Chapter 1\n1.1 Early Life and Education of Alan Turing\n... (20 sections per chapter) ..."
     st.session_state.stage = "approve"
     st.rerun()
@@ -210,14 +212,22 @@ if st.session_state.stage == "writing":
         if len(latest_agents) > 3: latest_agents.pop(0)
         army_placeholder.markdown("\n\n".join(latest_agents))
         time.sleep(0.03)
-        resp = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG detailed LaTeX section titled '{real_title}' about Alan Turing only. Include many \\cite{{key}}. Output ONLY LaTeX."}], temperature=0.8, **get_max_tokens_kw(model, 2500))
-        drafts.append(resp.choices[0].message.content.strip())
+        try:
+            resp = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG detailed LaTeX section titled '{real_title}' about Alan Turing only. Include many \\cite{{key}}. Output ONLY LaTeX."}], temperature=0.8, **get_max_tokens_kw(model, 2500))
+            drafts.append(resp.choices[0].message.content.strip())
+        except Exception as e:
+            st.error(f"❌ Draft {j+1} failed: {str(e)}")
+            drafts.append("")
     st.info("✅ 5 drafts completed — running synthesizer...")
 
-    synth_prompt = f"""Combine these 5 drafts into ONE long, detailed LaTeX section for the exact title '{real_title}'. Write ONLY about Alan Turing. NEVER return empty text. Output ONLY LaTeX.\n\n""" + "\n\n---\n\n".join(drafts)
-    synth = client.chat.completions.create(model=model, messages=[{"role": "system", "content": synth_prompt}], temperature=0.7, **get_max_tokens_kw(model, 3500))
-    section_text = synth.choices[0].message.content.strip()
-    st.info(f"🔍 RAW SYNTHESIZER OUTPUT — length: {len(section_text)} chars")
+    try:
+        synth_prompt = f"""Combine these 5 drafts into ONE long, detailed LaTeX section for the exact title '{real_title}'. Write ONLY about Alan Turing. NEVER return empty text. Output ONLY LaTeX.\n\n""" + "\n\n---\n\n".join(drafts)
+        synth = client.chat.completions.create(model=model, messages=[{"role": "system", "content": synth_prompt}], temperature=0.7, **get_max_tokens_kw(model, 3500))
+        section_text = synth.choices[0].message.content.strip()
+        st.info(f"🔍 RAW SYNTHESIZER OUTPUT — length: {len(section_text)} chars")
+    except Exception as e:
+        st.error(f"❌ Synthesizer failed: {str(e)}")
+        section_text = ""
 
     if len(section_text) < 500:
         st.error("⚠️ Synthesizer returned nothing — HARD FALLBACK")
@@ -270,4 +280,4 @@ if st.session_state.stage == "writing":
 
     st.stop()
 
-st.caption("💡 Version 84.0 — This is the complete file with no missing code")
+st.caption("💡 Version 86.0 — GPT-5.4 is now the default (latest model confirmed)")
