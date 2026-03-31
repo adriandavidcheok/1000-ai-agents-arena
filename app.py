@@ -21,8 +21,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-PERSONAS = ["Professor at Harvard", "Professor at MIT"] * 100
-
 if "stage" not in st.session_state: st.session_state.stage = "idle"
 if "current_prompt" not in st.session_state: st.session_state.current_prompt = None
 if "outline" not in st.session_state: st.session_state.outline = None
@@ -34,7 +32,7 @@ if "section_titles" not in st.session_state: st.session_state.section_titles = {
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 89.0 — Exact cleaning functions shown + 2 agents only**")
+    st.markdown("**Version 90.0 — client fixed + exact cleaning functions shown**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -47,6 +45,14 @@ with st.sidebar:
     st.header("📁 Background Documents")
     uploaded_files = st.file_uploader("Upload PDF, DOCX, TXT files", type=["pdf", "docx", "txt"], accept_multiple_files=True)
 
+# CLIENT CREATED HERE — BEFORE ANY STAGE CODE
+if api_key:
+    client = OpenAI(api_key=api_key)
+else:
+    client = None
+    st.sidebar.error("⚠️ Please enter your OpenAI API Key above")
+
+PERSONAS = ["Professor at Harvard", "Professor at MIT"] * 100
 col_left, col_right = st.columns([3, 2])
 
 with col_left:
@@ -129,7 +135,6 @@ if uploaded_files:
     background_corpus = "".join(read_uploaded_file(f) + "\n\n" for f in uploaded_files)
     st.sidebar.success(f"Loaded {len(uploaded_files)} background documents")
 
-# STAGE 1: Outline
 if st.session_state.stage == "outline":
     with col_left:
         st.subheader("🔥 AI Army is creating the book outline")
@@ -173,7 +178,6 @@ Output EXACTLY in this format (nothing else):
     st.session_state.stage = "approve"
     st.rerun()
 
-# STAGE 2: Approve
 if st.session_state.stage == "approve":
     st.subheader("Proposed Book Outline")
     st.markdown(f'<div class="outline-text">{st.session_state.outline}</div>', unsafe_allow_html=True)
@@ -195,7 +199,6 @@ if st.session_state.stage == "approve":
             st.session_state.stage = "outline"
             st.rerun()
 
-# STAGE 3: Writing — FULLY EXPANDED
 if st.session_state.stage == "writing":
     st.info("✅ ENTERED WRITING STAGE")
     with col_left:
@@ -296,4 +299,4 @@ if st.session_state.stage == "writing":
 
     st.stop()
 
-st.caption("💡 Version 89.0 — Full code + exact cleaning functions shown on screen")
+st.caption("💡 Version 90.0 — client fixed at top + exact cleaning functions shown")
