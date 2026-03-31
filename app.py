@@ -32,7 +32,7 @@ if "section_titles" not in st.session_state: st.session_state.section_titles = {
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 90.0 — client fixed + exact cleaning functions shown**")
+    st.markdown("**Version 91.0 — Per-section download links + forced \\section{} heading**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -45,7 +45,7 @@ with st.sidebar:
     st.header("📁 Background Documents")
     uploaded_files = st.file_uploader("Upload PDF, DOCX, TXT files", type=["pdf", "docx", "txt"], accept_multiple_files=True)
 
-# CLIENT CREATED HERE — BEFORE ANY STAGE CODE
+# CLIENT CREATED HERE
 if api_key:
     client = OpenAI(api_key=api_key)
 else:
@@ -269,25 +269,32 @@ if st.session_state.stage == "writing":
         st.error("⚠️ FINAL CONTENT STILL TOO SHORT — FORCING LAST FALLBACK")
         clean_section = r"\section{" + real_title + r"} Alan Turing was a brilliant British mathematician and computer scientist. This section explores " + real_title + r" in detail."
 
-    filename_tex = f"chapter_{chapter}.tex"
-    with open(filename_tex, "a") as f:
+    # FORCE PROPER SECTION HEADING
+    clean_section = f"\\section{{{real_title}}}\n" + clean_section
+
+    # Per-section download file
+    section_filename = f"chapter_{chapter}_section_{section}.tex"
+    with open(section_filename, "w") as f:
+        f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{Chapter " + str(chapter) + " - Alan Turing}\maketitle" + clean_section + r"\end{document}")
+
+    # Also append to chapter file for full book
+    chapter_filename = f"chapter_{chapter}.tex"
+    with open(chapter_filename, "a") as f:
         if st.session_state.current_section == 1:
             f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{Chapter " + str(chapter) + " - Alan Turing}\maketitle")
         f.write(clean_section + "\n\n")
 
-    filename_bib = f"chapter_{chapter}.bib"
-    with open(filename_bib, "w") as f:
-        f.write(open("references.bib", "r").read() if os.path.exists("references.bib") else "")
+    # Download button for this section
+    with open(section_filename, "r") as f:
+        st.download_button(f"📥 Download Section {chapter}.{section} — {real_title}.tex", f.read(), section_filename)
 
+    # Live previews
     for line in clean_section.split("\n"):
         if line.strip():
-            latex_preview.code(f"\\section{{Chapter {chapter} - Section {section} — {real_title}}}\n{line.strip()}", language="latex")
-            time.sleep(0.08)
-    for line in open(filename_bib, "r").read().split("\n"):
-        if line.strip():
-            bib_preview.code(line, language="bibtex")
+            latex_preview.code(line, language="latex")
             time.sleep(0.08)
 
+    # Progress to next section
     st.session_state.current_section += 1
     if st.session_state.current_section > 20:
         st.session_state.current_section = 1
@@ -299,4 +306,4 @@ if st.session_state.stage == "writing":
 
     st.stop()
 
-st.caption("💡 Version 90.0 — client fixed at top + exact cleaning functions shown")
+st.caption("💡 Version 91.0 — Per-section download links + forced \\section{} heading")
