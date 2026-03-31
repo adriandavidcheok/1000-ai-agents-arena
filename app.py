@@ -28,11 +28,12 @@ if "previous_summary" not in st.session_state: st.session_state.previous_summary
 if "current_chapter" not in st.session_state: st.session_state.current_chapter = 1
 if "current_section" not in st.session_state: st.session_state.current_section = 1
 if "section_titles" not in st.session_state: st.session_state.section_titles = {}
+if "completed_chapters" not in st.session_state: st.session_state.completed_chapters = set()
 
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 91.0 — Per-section download links + forced \\section{} heading**")
+    st.markdown("**Version 92.0 — Per-section + full-chapter downloads + proper \\section{} newlines**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -45,7 +46,6 @@ with st.sidebar:
     st.header("📁 Background Documents")
     uploaded_files = st.file_uploader("Upload PDF, DOCX, TXT files", type=["pdf", "docx", "txt"], accept_multiple_files=True)
 
-# CLIENT CREATED HERE
 if api_key:
     client = OpenAI(api_key=api_key)
 else:
@@ -269,36 +269,50 @@ if st.session_state.stage == "writing":
         st.error("⚠️ FINAL CONTENT STILL TOO SHORT — FORCING LAST FALLBACK")
         clean_section = r"\section{" + real_title + r"} Alan Turing was a brilliant British mathematician and computer scientist. This section explores " + real_title + r" in detail."
 
-    # FORCE PROPER SECTION HEADING
-    clean_section = f"\\section{{{real_title}}}\n" + clean_section
+    # FORCE PROPER NEWLINES + SECTION HEADING
+    clean_section = f"\\section{{{real_title}}}\n\n" + clean_section
 
-    # Per-section download file
+    # Per-section file
     section_filename = f"chapter_{chapter}_section_{section}.tex"
     with open(section_filename, "w") as f:
-        f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{Chapter " + str(chapter) + " - Alan Turing}\maketitle" + clean_section + r"\end{document}")
+        f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{Chapter " + str(chapter) + " - Alan Turing}\maketitle\n\n" + clean_section + r"\end{document}")
 
-    # Also append to chapter file for full book
+    # Append to full chapter file
     chapter_filename = f"chapter_{chapter}.tex"
     with open(chapter_filename, "a") as f:
         if st.session_state.current_section == 1:
-            f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{Chapter " + str(chapter) + " - Alan Turing}\maketitle")
+            f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{Chapter " + str(chapter) + " - Alan Turing}\maketitle\n\n")
         f.write(clean_section + "\n\n")
 
-    # Download button for this section
+    # Per-section download
     with open(section_filename, "r") as f:
         st.download_button(f"📥 Download Section {chapter}.{section} — {real_title}.tex", f.read(), section_filename)
+
+    # Full chapter download (always available once chapter has content)
+    chapter_bib = f"chapter_{chapter}.bib"
+    with open(chapter_bib, "w") as f:
+        f.write(open("references.bib", "r").read() if os.path.exists("references.bib") else "")
+    with open(chapter_filename, "r") as f:
+        st.download_button(f"📥 Download FULL Chapter {chapter}.tex", f.read(), chapter_filename)
+    with open(chapter_bib, "r") as f:
+        st.download_button(f"📥 Download FULL Chapter {chapter}.bib", f.read(), chapter_bib)
 
     # Live previews
     for line in clean_section.split("\n"):
         if line.strip():
             latex_preview.code(line, language="latex")
             time.sleep(0.08)
+    for line in open(chapter_bib, "r").read().split("\n"):
+        if line.strip():
+            bib_preview.code(line, language="bibtex")
+            time.sleep(0.08)
 
-    # Progress to next section
+    # Progress
     st.session_state.current_section += 1
     if st.session_state.current_section > 20:
         st.session_state.current_section = 1
         st.session_state.current_chapter += 1
+        st.session_state.completed_chapters.add(chapter)
     if st.session_state.current_chapter > 10:
         st.session_state.stage = "done"
     else:
@@ -306,4 +320,4 @@ if st.session_state.stage == "writing":
 
     st.stop()
 
-st.caption("💡 Version 91.0 — Per-section download links + forced \\section{} heading")
+st
