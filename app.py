@@ -320,4 +320,4 @@ if st.session_state.stage == "writing":
 
     st.stop()
 
-st
+st.caption("💡 Version 92.0 — Per-section + full-chapter downloads + proper \\section{} newlines")
