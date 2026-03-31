@@ -33,7 +33,7 @@ if "completed_sections" not in st.session_state: st.session_state.completed_sect
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 96.0 — HALT after Chapter 1 complete + full Chapter 1 downloads**")
+    st.markdown("**Version 96.0 — Persistent section downloads + full Chapter 1 downloads + HALT**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -290,7 +290,6 @@ if st.session_state.stage == "writing":
     with open(bib_filename, "r") as f:
         st.download_button(f"📥 Download CUMULATIVE references.bib", f.read(), bib_filename)
 
-    # HALT AFTER CHAPTER 1 IS COMPLETE
     if chapter == 1 and section == 20:
         with open(chapter_filename, "a") as f:
             f.write(r"\end{document}")
@@ -322,7 +321,6 @@ if st.session_state.stage == "writing":
 
     st.stop()
 
-# HALT STAGE
 if st.session_state.stage == "halted":
     st.success("🚨 HALT — Chapter 1 is fully finished!")
     st.balloons()
@@ -331,7 +329,10 @@ if st.session_state.stage == "halted":
       <source src="https://www.soundjay.com/buttons/beep-07.mp3" type="audio/mpeg">
     </audio>
     """, unsafe_allow_html=True)
-    st.info("✅ All files for Chapter 1 are ready. Use the download buttons above.")
+    st.info("All files for Chapter 1 are ready. Use the download buttons above.")
+    for ch, sec, fname in st.session_state.completed_sections:
+        with open(fname, "r") as f:
+            st.download_button(f"📥 Download Section {ch}.{sec}.tex", f.read(), fname)
     st.stop()
 
-st.caption("💡 Version 96.0 — HALT after Chapter 1 complete + full Chapter 1 downloads")
+st.caption("💡 Version 96.0 — Persistent section downloads + full Chapter 1 downloads + HALT")
