@@ -37,7 +37,7 @@ if "covered_topics" not in st.session_state: st.session_state.covered_topics = [
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 109.0 — Maximum OpenAI debugging (gpt-5.4 kept)**")
+    st.markdown("**Version 109.1 — Maximum debugging (gpt-4o default)**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -45,7 +45,7 @@ with st.sidebar:
     st.header("⚙️ Settings")
     api_key = st.text_input("OpenAI API Key", type="password", value=os.getenv("OPENAI_API_KEY", ""))
     if api_key: os.environ["OPENAI_API_KEY"] = api_key
-    model = st.selectbox("Model", ["gpt-5.4", "gpt-4o", "gpt-4o-mini"], index=0)
+    model = st.selectbox("Model", ["gpt-4o", "gpt-4o-mini", "gpt-5.4"], index=0)
 
     st.header("📁 Background Documents")
     uploaded_files = st.file_uploader("Upload PDF, DOCX, TXT files", type=["pdf", "docx", "txt"], accept_multiple_files=True)
