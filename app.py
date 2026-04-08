@@ -37,7 +37,7 @@ if "covered_topics" not in st.session_state: st.session_state.covered_topics = [
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 105.0 — Fully generalized for any topic**")
+    st.markdown("**Version 106.0 — Strict 15 sections per chapter**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -253,16 +253,24 @@ if st.session_state.stage == "outline":
                 response = client.chat.completions.create(
                     model=model,
                     messages=[{"role": "system", "content": f"""Create a book outline for: {st.session_state.current_prompt}.
-Output EXACTLY in this format (nothing else):
+You MUST output EXACTLY 10 chapters.
+Each chapter MUST have EXACTLY 15 sections.
+Use this exact format and nothing else:
+
 ## Chapter 1
 1.1 Title of first section
 1.2 Title of second section
 ...
-## Chapter 10
-10.14 Title
-10.15 Title"""}],
+1.15 Title of fifteenth section
+
+## Chapter 2
+2.1 ...
+...
+2.15 ...
+
+... up to Chapter 10 with 10.15"""}],
                     temperature=0.7,
-                    **get_max_tokens_kw(model, 3000)
+                    **get_max_tokens_kw(model, 4000)
                 )
                 st.session_state.outline = response.choices[0].message.content.strip()
                 st.success("✅ Outline generated!")
@@ -475,4 +483,4 @@ if st.session_state.stage == "halted":
         st.rerun()
     st.stop()
 
-st.caption("💡 Version 105.0 — Fully generalized for any topic")
+st.caption("💡 Version 106.0 — Strict 15 sections per chapter")
