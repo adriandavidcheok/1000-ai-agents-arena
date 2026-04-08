@@ -37,7 +37,7 @@ if "covered_topics" not in st.session_state: st.session_state.covered_topics = [
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 106.0 — Strict 15 sections per chapter**")
+    st.markdown("**Version 107.0 — No fallback, detailed error on failure**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -336,24 +336,16 @@ DO NOT repeat ANY of these already covered topics:
 {covered_summary}
 Include many \\cite{{key}}. Output ONLY LaTeX."""
 
-    section_text = ""
-    for attempt in range(3):
-        try:
-            resp = client.chat.completions.create(model=model, messages=[{"role": "system", "content": prompt_text}], temperature=0.75 + attempt*0.05, **get_max_tokens_kw(model, 2800))
-            section_text = resp.choices[0].message.content.strip()
-            if len(section_text) > 300:
-                break
-        except Exception as e:
-            st.warning(f"Attempt {attempt+1} failed: {str(e)}")
-            time.sleep(1)
-    if not section_text or len(section_text) < 300:
-        st.error("⚠️ Agent returned nothing — HARD FALLBACK (retrying with fallback prompt)")
-        fallback_prompt = f"""Write a VERY LONG detailed LaTeX section about the topic: {st.session_state.current_prompt} titled '{real_title}'. Include many \\cite{{key}}. Output ONLY LaTeX."""
-        try:
-            fallback = client.chat.completions.create(model=model, messages=[{"role": "system", "content": fallback_prompt}], temperature=0.8, **get_max_tokens_kw(model, 4000))
-            section_text = fallback.choices[0].message.content.strip()
-        except Exception:
-            section_text = r"\section{" + real_title + r"} This section explores the topic in detail."
+    try:
+        resp = client.chat.completions.create(model=model, messages=[{"role": "system", "content": prompt_text}], temperature=0.8, **get_max_tokens_kw(model, 3000))
+        section_text = resp.choices[0].message.content.strip()
+        if not section_text or len(section_text.strip()) < 100:
+            raise Exception("Agent returned empty or too short content")
+    except Exception as e:
+        st.error(f"**CRITICAL ERROR — Agent failed to produce content**")
+        st.error(f"Exception: {str(e)}")
+        st.error(f"Prompt sent: {prompt_text[:500]}...")
+        st.stop()
 
     st.info("**Running Chapter Reviewer Agent to remove duplication...**")
     reviewer = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"Remove ALL repetitions from section '{real_title}'. Keep VERY LONG. Output ONLY LaTeX.\n\n{section_text}"}], temperature=0.7, **get_max_tokens_kw(model, 4000))
@@ -372,10 +364,6 @@ Include many \\cite{{key}}. Output ONLY LaTeX."""
     clean_section = remove_robotic_paragraph_openers(clean_section)
     st.info("→ Running ensure_subsection_ends_cleanly()")
     clean_section = ensure_subsection_ends_cleanly(client, model, clean_section)
-
-    if len(clean_section) < 500:
-        st.error("⚠️ FINAL CONTENT STILL TOO SHORT — FORCING LAST FALLBACK")
-        clean_section = r"\section{" + real_title + r"} This section explores the topic in detail."
 
     clean_section = f"\\section{{{real_title}}}\n\n" + clean_section
 
@@ -483,4 +471,4 @@ if st.session_state.stage == "halted":
         st.rerun()
     st.stop()
 
-st.caption("💡 Version 106.0 — Strict 15 sections per chapter")
+st.caption("💡 Version 107.0 — No fallback, detailed error on failure")
