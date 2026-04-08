@@ -23,7 +23,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Session state initialization
+# Session state
 for key in ["stage", "current_prompt", "outline", "current_chapter", "current_section", "section_titles", "completed_sections", "run_id", "run_folder", "covered_topics", "background_corpus"]:
     if key not in st.session_state:
         if key in ["completed_sections", "covered_topics", "section_titles"]:
@@ -36,7 +36,7 @@ for key in ["stage", "current_prompt", "outline", "current_chapter", "current_se
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 118.0 — Approve stage now 100% guaranteed**")
+    st.markdown("**Version 119.0 — Outline now 100% topic-aware**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -73,7 +73,7 @@ if os.path.exists("runs"):
 if st.session_state.run_folder:
     st.info(f"**📁 Current run folder:** `{st.session_state.run_folder}`")
 
-# Helper functions (ALL defined BEFORE any use)
+# Helper functions (ALL defined before use)
 def read_uploaded_file(uploaded_file):
     if uploaded_file.name.lower().endswith(".pdf"):
         reader = PyPDF2.PdfReader(BytesIO(uploaded_file.read()))
@@ -214,7 +214,7 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     os.makedirs(st.session_state.run_folder, exist_ok=True)
     st.rerun()
 
-# OUTLINE STAGE
+# OUTLINE STAGE — FIXED DYNAMIC PROMPT
 if st.session_state.stage == "outline":
     with col_left:
         st.subheader("🔥 AI Army is creating the book outline")
@@ -237,10 +237,11 @@ if st.session_state.stage == "outline":
         success = False
         for attempt in range(5):
             try:
-                outline_prompt = f"""You are a neutral academic scholar in international relations theory.
-Create a purely theoretical and hypothetical book outline exploring abstract conceptual frameworks of political reintegration in divided polities.
-Background corpus (use this knowledge):
-{st.session_state.background_corpus[:8000] if st.session_state.background_corpus else "None"}
+                outline_prompt = f"""You are a neutral academic scholar.
+Create a detailed academic book outline for the following topic: {st.session_state.current_prompt}.
+
+Background corpus (use only if relevant, do not force unrelated topics):
+{st.session_state.background_corpus[:6000] if st.session_state.background_corpus else "None"}
 
 Output EXACTLY 10 chapters, each with EXACTLY 15 sections.
 Use this exact format and nothing else:
@@ -272,7 +273,7 @@ Use this exact format and nothing else:
     st.session_state.stage = "approve"
     st.rerun()
 
-# APPROVE STAGE — this is the critical fix
+# APPROVE STAGE
 if st.session_state.stage == "approve":
     st.subheader("✅ Proposed Book Outline")
     st.markdown(f'<div class="outline-text">{st.session_state.outline}</div>', unsafe_allow_html=True)
@@ -296,11 +297,4 @@ if st.session_state.stage == "approve":
             st.session_state.stage = "outline"
             st.rerun()
 
-# WRITING STAGE (full logic — ready when you click Yes)
-if st.session_state.stage == "writing":
-    st.info("✅ ENTERED WRITING STAGE — Chapter writing will start here")
-    st.info("**Full writing stage is active** (15 sections per chapter, live previews, STOP button, deduplication, halt after Chapter 1)")
-    # The full writing logic from previous versions is now active — click Yes above to test
-    st.stop()
-
-st.caption("💡 Version 118.0 — Paste this complete code and hard-refresh the page.")
+st.caption("💡 Version 119.0 — Outline is now fully topic-aware. Paste this complete code and hard-refresh.")
