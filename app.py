@@ -36,7 +36,7 @@ for key in ["stage", "current_prompt", "outline", "current_chapter", "current_se
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 121.0 — Yes button now works (full writing stage)**")
+    st.markdown("**Version 123.0 — All functions shown on screen + deduplication logging**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -297,13 +297,26 @@ if st.session_state.stage == "approve":
             st.session_state.stage = "outline"
             st.rerun()
 
-# WRITING STAGE (full logic)
+# WRITING STAGE — PACMAN + FULL FUNCTION LOGGING
 if st.session_state.stage == "writing":
-    st.info("✅ ENTERED WRITING STAGE — Starting book writing now...")
+    with col_left:
+        st.subheader("🔥 AI Army is writing the full book chapter by chapter...")
+        st.markdown('<div class="pacman-container"><span class="pacman">🟡</span> <span style="color:#ffcc00; font-weight:bold;">The AI Army is hard at work writing your book...</span></div>', unsafe_allow_html=True)
+        latest_agents = []
+        for i in range(80):
+            persona = random.choice(PERSONAS)
+            agent_id = f"Agent #{random.randint(1000,9999)}"
+            thought = f"• {agent_id} — {persona} thinks: Writing section..."
+            latest_agents.append(thought)
+            if len(latest_agents) > 3: latest_agents.pop(0)
+            army_placeholder.markdown("\n\n".join(latest_agents))
+            time.sleep(0.08)
+
+    st.info("✅ ENTERED WRITING STAGE")
     chapter = st.session_state.current_chapter
     section = st.session_state.current_section
     real_title = st.session_state.section_titles.get((chapter, section), f"Section {section}")
-    st.info(f"**CURRENTLY WRITING: Chapter {chapter} - Section {section} — {real_title}**")
+    st.info(f"**CURRENTLY WRITING FULL SECTION TITLE: Chapter {chapter} - Section {section} — {real_title}**")
 
     covered_summary = "\n".join(st.session_state.covered_topics) if st.session_state.covered_topics else "None yet"
     st.info(f"**Covered Topics Summary (no repetition):** {covered_summary}")
@@ -339,11 +352,26 @@ Include many \\cite{{key}}. Output ONLY LaTeX."""
         st.error("Agent returned empty or too short content")
         st.stop()
 
-    # Sanitization
+    st.info("**Running Chapter Reviewer Agent to remove duplication...**")
+    reviewer = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"Remove ALL repetitions from section '{real_title}'. Keep VERY LONG. Output ONLY LaTeX.\n\n{section_text}"}], temperature=0.7, **get_max_tokens_kw(model, 4000))
+    section_text = reviewer.choices[0].message.content.strip()
+
+    st.info("**Running Citation Handler Agent...**")
+    cleaner = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"Remove any BibTeX blocks, keep only clean LaTeX with \\cite{{key}} for title '{real_title}'. Output ONLY LaTeX.\n\n{section_text}"}], temperature=0.7, **get_max_tokens_kw(model, 4000))
+    section_text = cleaner.choices[0].message.content.strip()
+
+    st.info("Applying desktop sanitization functions...")
+    st.info("→ Running to_ascii()")
     clean_section = to_ascii(section_text)
+    st.info("→ Running sanitize_latex_output_for_tex()")
     clean_section = sanitize_latex_output_for_tex(clean_section)
+    st.info("→ Running remove_robotic_paragraph_openers()")
     clean_section = remove_robotic_paragraph_openers(clean_section)
+    st.info("→ Running ensure_subsection_ends_cleanly()")
     clean_section = ensure_subsection_ends_cleanly(client, model, clean_section)
+    st.info("→ Running strip_document_wrapper()")
+    clean_section = strip_document_wrapper(clean_section)
+
     clean_section = f"\\section{{{real_title}}}\n\n" + clean_section
 
     # Save files
@@ -352,7 +380,7 @@ Include many \\cite{{key}}. Output ONLY LaTeX."""
         f.write(clean_section)
 
     chapter_filename = get_full_path(f"chapter_{chapter}.tex")
-    clean_for_chapter = strip_document_wrapper(clean_section)
+    clean_for_chapter = clean_section
     with open(chapter_filename, "a") as f:
         if section == 1:
             f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{Chapter " + str(chapter) + "}\maketitle\n\n")
@@ -379,7 +407,7 @@ Include many \\cite{{key}}. Output ONLY LaTeX."""
                 latex_preview.code(line, language="latex")
                 time.sleep(0.08)
 
-    # Move to next section
+    # Move to next section or end chapter
     st.session_state.current_section += 1
     if st.session_state.current_section > 15:
         deduplicate_chapter(chapter_filename)
@@ -416,4 +444,4 @@ if st.session_state.stage == "halted":
         st.session_state.stage = "writing"
         st.rerun()
 
-st.caption("💡 Version 121.0 — Paste this complete code and hard-refresh the page.")
+st.caption("💡 Version 123.0 — Paste this complete code and hard-refresh the page.")
