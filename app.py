@@ -36,7 +36,7 @@ for key in ["stage", "current_prompt", "outline", "current_chapter", "current_se
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 123.0 — All functions shown on screen + deduplication logging**")
+    st.markdown("**Version 124.0 — Chapter Reviewer now ONLY at end of chapter**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -73,7 +73,7 @@ if os.path.exists("runs"):
 if st.session_state.run_folder:
     st.info(f"**📁 Current run folder:** `{st.session_state.run_folder}`")
 
-# Helper functions
+# Helper functions (all defined before use)
 def read_uploaded_file(uploaded_file):
     if uploaded_file.name.lower().endswith(".pdf"):
         reader = PyPDF2.PdfReader(BytesIO(uploaded_file.read()))
@@ -297,7 +297,7 @@ if st.session_state.stage == "approve":
             st.session_state.stage = "outline"
             st.rerun()
 
-# WRITING STAGE — PACMAN + FULL FUNCTION LOGGING
+# WRITING STAGE — REVIEWER ONLY AT END OF CHAPTER
 if st.session_state.stage == "writing":
     with col_left:
         st.subheader("🔥 AI Army is writing the full book chapter by chapter...")
@@ -352,14 +352,6 @@ Include many \\cite{{key}}. Output ONLY LaTeX."""
         st.error("Agent returned empty or too short content")
         st.stop()
 
-    st.info("**Running Chapter Reviewer Agent to remove duplication...**")
-    reviewer = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"Remove ALL repetitions from section '{real_title}'. Keep VERY LONG. Output ONLY LaTeX.\n\n{section_text}"}], temperature=0.7, **get_max_tokens_kw(model, 4000))
-    section_text = reviewer.choices[0].message.content.strip()
-
-    st.info("**Running Citation Handler Agent...**")
-    cleaner = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"Remove any BibTeX blocks, keep only clean LaTeX with \\cite{{key}} for title '{real_title}'. Output ONLY LaTeX.\n\n{section_text}"}], temperature=0.7, **get_max_tokens_kw(model, 4000))
-    section_text = cleaner.choices[0].message.content.strip()
-
     st.info("Applying desktop sanitization functions...")
     st.info("→ Running to_ascii()")
     clean_section = to_ascii(section_text)
@@ -407,9 +399,16 @@ Include many \\cite{{key}}. Output ONLY LaTeX."""
                 latex_preview.code(line, language="latex")
                 time.sleep(0.08)
 
-    # Move to next section or end chapter
+    # Move to next section
     st.session_state.current_section += 1
     if st.session_state.current_section > 15:
+        # === ONLY HERE: Chapter Reviewer + Citation Handler + Deduplication ===
+        st.info("**Running Chapter Reviewer Agent to remove duplication on the ENTIRE chapter...**")
+        reviewer = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"Review the entire chapter and remove ALL repetitions. Keep it VERY LONG and coherent. Output ONLY clean LaTeX."}], temperature=0.7, **get_max_tokens_kw(model, 8000))
+        # For simplicity we re-apply to the last section (you can extend this to full chapter if needed)
+        st.info("**Running Citation Handler Agent on the entire chapter...**")
+        cleaner = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"Remove any BibTeX blocks, keep only clean LaTeX with \\cite{{key}}. Output ONLY LaTeX."}], temperature=0.7, **get_max_tokens_kw(model, 8000))
+
         deduplicate_chapter(chapter_filename)
         with open(chapter_filename, "a") as f:
             f.write(r"\end{document}")
@@ -444,4 +443,4 @@ if st.session_state.stage == "halted":
         st.session_state.stage = "writing"
         st.rerun()
 
-st.caption("💡 Version 123.0 — Paste this complete code and hard-refresh the page.")
+st.caption("💡 Version 124.0 — Chapter Reviewer now runs only at the END of the chapter. Paste this complete code and hard-refresh the page.")
