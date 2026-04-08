@@ -7,6 +7,8 @@ import re
 import PyPDF2
 import docx
 from io import BytesIO
+import zipfile
+import datetime
 
 st.set_page_config(page_title="1000 AI Agents Arena", layout="wide")
 
@@ -24,16 +26,17 @@ st.markdown("""
 if "stage" not in st.session_state: st.session_state.stage = "idle"
 if "current_prompt" not in st.session_state: st.session_state.current_prompt = None
 if "outline" not in st.session_state: st.session_state.outline = None
-if "previous_summary" not in st.session_state: st.session_state.previous_summary = ""
 if "current_chapter" not in st.session_state: st.session_state.current_chapter = 1
 if "current_section" not in st.session_state: st.session_state.current_section = 1
 if "section_titles" not in st.session_state: st.session_state.section_titles = {}
 if "completed_sections" not in st.session_state: st.session_state.completed_sections = []
+if "run_id" not in st.session_state: st.session_state.run_id = None
+if "run_folder" not in st.session_state: st.session_state.run_folder = None
 
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 96.0 — Persistent section downloads + HALT after Chapter 1**")
+    st.markdown("**Version 102.0 — All sections now use full real titles (pure Python)**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -58,28 +61,67 @@ col_left, col_right = st.columns([3, 2])
 with col_left:
     army_placeholder = st.empty()
 
+# RECOVERY PANEL
+st.sidebar.header("🔄 All Previous Runs")
+if os.path.exists("runs"):
+    for folder in sorted(os.listdir("runs"), reverse=True):
+        path = f"runs/{folder}"
+        zip_path = f"{path}/full_run.zip"
+        if os.path.exists(zip_path):
+            with open(zip_path, "rb") as f:
+                st.sidebar.download_button(f"📥 {folder} — Full ZIP", f.read(), f"{folder}.zip")
+
+if st.session_state.run_folder:
+    st.info(f"**📁 Current run folder:** `{st.session_state.run_folder}`")
+
+if st.session_state.run_folder and os.path.exists(st.session_state.run_folder):
+    with st.expander("📁 Current Run Files (download any file)", expanded=True):
+        files = sorted(os.listdir(st.session_state.run_folder))
+        for file in files:
+            full_path = f"{st.session_state.run_folder}/{file}"
+            if os.path.isfile(full_path):
+                with open(full_path, "rb") as f:
+                    st.download_button(f"📥 {file}", f.read(), file)
+        full_run_zip = f"{st.session_state.run_folder}/full_run.zip"
+        if not os.path.exists(full_run_zip):
+            with zipfile.ZipFile(full_run_zip, "w") as zipf:
+                for file in files:
+                    zipf.write(f"{st.session_state.run_folder}/{file}", file)
+        with open(full_run_zip, "rb") as f:
+            st.download_button("📥 Download ENTIRE Current Run as ZIP", f.read(), f"{os.path.basename(st.session_state.run_folder)}.zip")
+
 if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.current_prompt = prompt
     st.session_state.stage = "outline"
-    st.session_state.previous_summary = ""
     st.session_state.current_chapter = 1
     st.session_state.current_section = 1
     st.session_state.section_titles = {}
     st.session_state.completed_sections = []
+    st.session_state.run_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    st.session_state.run_folder = f"runs/run_{st.session_state.run_id}"
+    os.makedirs(st.session_state.run_folder, exist_ok=True)
     st.rerun()
 
 def parse_section_titles(outline_text):
     titles = {}
     for line in outline_text.splitlines():
         line = line.strip()
-        match = re.match(r'^\s*(\d+)\.(\d+)[.\s]*(.+)', line)
-        if not match: match = re.match(r'^\s*\**\s*(\d+)\.(\d+)[.\s]*(.+)', line)
-        if not match: match = re.match(r'^\s*Chapter\s*(\d+)\s*-\s*Section\s*(\d+):\s*(.+)', line, re.I)
-        if match:
-            ch = int(match.group(1))
-            sec = int(match.group(2))
-            title = match.group(3).strip()
-            titles[(ch, sec)] = title
+        # Multiple robust patterns – pure Python, no OpenAI
+        patterns = [
+            r'^\s*(\d+)\.(\d+)\s*[.\-–—]?\s*(.+)',           # 1.1 The Life of Brian
+            r'^\s*\**\s*(\d+)\.(\d+)\s*[.\-–—]?\s*(.+)',    # **1.1 The Life of Brian
+            r'^\s*(\d+)\.(\d+)\s*[:\-–—]?\s*(.+)',          # 1.1: The Life of Brian
+            r'^\s*Section\s*(\d+)\.(\d+)\s*[:\-–—]?\s*(.+)', 
+            r'^\s*Chapter\s*(\d+)\s*Section\s*(\d+)\s*[:\-–—]?\s*(.+)', 
+        ]
+        for pattern in patterns:
+            match = re.match(pattern, line, re.IGNORECASE)
+            if match:
+                ch = int(match.group(1))
+                sec = int(match.group(2))
+                title = match.group(3).strip()
+                titles[(ch, sec)] = title
+                break
     return titles
 
 def get_max_tokens_kw(model_name, tokens):
@@ -121,6 +163,32 @@ def ensure_subsection_ends_cleanly(client, model, text: str) -> str:
     match = re.search(r'.*[.!?]', text, re.DOTALL)
     return match.group(0) if match else text
 
+def strip_document_wrapper(full_tex: str) -> str:
+    full_tex = re.sub(r'\\documentclass\[.*?\]\{.*?\}', '', full_tex, flags=re.IGNORECASE)
+    full_tex = re.sub(r'\\usepackage\{.*?\}', '', full_tex, flags=re.IGNORECASE)
+    full_tex = re.sub(r'\\begin\{document\}', '', full_tex, flags=re.IGNORECASE)
+    full_tex = re.sub(r'\\title\{.*?\}', '', full_tex, flags=re.IGNORECASE)
+    full_tex = re.sub(r'\\maketitle', '', full_tex, flags=re.IGNORECASE)
+    full_tex = re.sub(r'\\end\{document\}', '', full_tex, flags=re.IGNORECASE)
+    full_tex = re.sub(r'\n{3,}', '\n\n', full_tex)
+    return full_tex.strip()
+
+def extract_citation_keys(text: str):
+    return re.findall(r'\\cite\{([^}]+)\}', text)
+
+def append_bibtex_entries(keys):
+    if not keys: return
+    bib_path = f"{st.session_state.run_folder}/references.bib"
+    existing = ""
+    if os.path.exists(bib_path):
+        with open(bib_path, "r") as f: existing = f.read()
+    new_entries = ""
+    for key in keys:
+        if key not in existing:
+            new_entries += f"@article{{{key}}},\n  title = {{Placeholder for {key}}},\n  author = {{Turing, A.}},\n  year = {{1950}},\n}}\n\n"
+    if new_entries:
+        with open(bib_path, "a") as f: f.write(new_entries)
+
 def read_uploaded_file(uploaded_file):
     if uploaded_file.name.lower().endswith(".pdf"):
         reader = PyPDF2.PdfReader(BytesIO(uploaded_file.read()))
@@ -135,6 +203,9 @@ def read_uploaded_file(uploaded_file):
 if uploaded_files:
     background_corpus = "".join(read_uploaded_file(f) + "\n\n" for f in uploaded_files)
     st.sidebar.success(f"Loaded {len(uploaded_files)} background documents")
+
+def get_full_path(filename):
+    return f"{st.session_state.run_folder}/{filename}"
 
 if st.session_state.stage == "outline":
     with col_left:
@@ -183,9 +254,9 @@ if st.session_state.stage == "approve":
     st.subheader("Proposed Book Outline")
     st.markdown(f'<div class="outline-text">{st.session_state.outline}</div>', unsafe_allow_html=True)
     if st.session_state.outline:
-        with open("outline.txt", "w") as f:
+        with open(get_full_path("outline.txt"), "w") as f:
             f.write(st.session_state.outline)
-        with open("outline.txt", "r") as f:
+        with open(get_full_path("outline.txt"), "r") as f:
             st.download_button("📥 Download outline.txt", f.read(), "outline.txt")
     col1, col2 = st.columns(2)
     with col1:
@@ -215,7 +286,9 @@ if st.session_state.stage == "writing":
     chapter = st.session_state.current_chapter
     section = st.session_state.current_section
     real_title = st.session_state.section_titles.get((chapter, section), f"Section {section}")
-    st.info(f"**CURRENTLY WRITING FULL SECTION TITLE: Chapter {chapter} - Section {section} — {real_title}**")
+    st.info(f"**Using full section title:** {real_title}")   # ← debug line so you can see it
+
+    # ... rest of the agent drafting, synthesizer, reviewer, citation handler, sanitization functions exactly as in v101.0 ...
 
     agents = ["Professor at Harvard", "Professor at MIT"]
     drafts = []
@@ -238,7 +311,6 @@ if st.session_state.stage == "writing":
     synth_prompt = f"""Combine these 2 drafts into ONE long, detailed LaTeX section for the exact title '{real_title}'. Write ONLY about Alan Turing. NEVER return empty text. Output ONLY LaTeX.\n\n""" + "\n\n---\n\n".join(drafts)
     synth = client.chat.completions.create(model=model, messages=[{"role": "system", "content": synth_prompt}], temperature=0.7, **get_max_tokens_kw(model, 3500))
     section_text = synth.choices[0].message.content.strip()
-    st.info(f"🔍 RAW SYNTHESIZER OUTPUT — length: {len(section_text)} chars")
 
     if len(section_text) < 500:
         st.error("⚠️ Synthesizer returned nothing — HARD FALLBACK")
@@ -248,12 +320,10 @@ if st.session_state.stage == "writing":
     st.info("**Running Chapter Reviewer Agent to remove duplication...**")
     reviewer = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"Remove ALL repetitions from section '{real_title}'. Keep VERY LONG. Output ONLY LaTeX.\n\n{section_text}"}], temperature=0.7, **get_max_tokens_kw(model, 4000))
     section_text = reviewer.choices[0].message.content.strip()
-    st.info(f"🔍 AFTER REVIEWER — length: {len(section_text)} chars")
 
     st.info("**Running Citation Handler Agent...**")
     cleaner = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"Remove any BibTeX blocks, keep only clean LaTeX with \\cite{{key}} for title '{real_title}'. Output ONLY LaTeX.\n\n{section_text}"}], temperature=0.7, **get_max_tokens_kw(model, 4000))
     section_text = cleaner.choices[0].message.content.strip()
-    st.info(f"🔍 AFTER CITATION HANDLER — length: {len(section_text)} chars")
 
     st.info("Applying desktop sanitization functions...")
     st.info("→ Running to_ascii()")
@@ -264,7 +334,6 @@ if st.session_state.stage == "writing":
     clean_section = remove_robotic_paragraph_openers(clean_section)
     st.info("→ Running ensure_subsection_ends_cleanly()")
     clean_section = ensure_subsection_ends_cleanly(client, model, clean_section)
-    st.info(f"🔍 FINAL CLEAN SECTION — length: {len(clean_section)} chars")
 
     if len(clean_section) < 500:
         st.error("⚠️ FINAL CONTENT STILL TOO SHORT — FORCING LAST FALLBACK")
@@ -272,34 +341,43 @@ if st.session_state.stage == "writing":
 
     clean_section = f"\\section{{{real_title}}}\n\n" + clean_section
 
-    section_filename = f"chapter_{chapter}_section_{section}.tex"
+    section_filename = get_full_path(f"chapter_{chapter}_section_{section}.tex")
     with open(section_filename, "w") as f:
         f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{Chapter " + str(chapter) + " - Alan Turing}\maketitle\n\n" + clean_section + r"\end{document}")
 
-    chapter_filename = f"chapter_{chapter}.tex"
+    chapter_filename = get_full_path(f"chapter_{chapter}.tex")
+    clean_for_chapter = strip_document_wrapper(clean_section)
     with open(chapter_filename, "a") as f:
         if st.session_state.current_section == 1:
             f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{Chapter " + str(chapter) + " - Alan Turing}\maketitle\n\n")
-        f.write(clean_section + "\n\n")
+        f.write(clean_for_chapter + "\n\n")
+
+    keys = extract_citation_keys(clean_section)
+    append_bibtex_entries(keys)
 
     st.session_state.completed_sections.append((chapter, section, section_filename))
-    with open(section_filename, "r") as f:
-        st.download_button(f"📥 Download Section {chapter}.{section} — {real_title}.tex", f.read(), section_filename)
 
-    bib_filename = "references.bib"
-    with open(bib_filename, "r") as f:
-        st.download_button(f"📥 Download CUMULATIVE references.bib", f.read(), bib_filename)
+    with open(section_filename, "r") as f:
+        st.download_button(f"📥 Download Section {chapter}.{section} — {real_title}.tex", f.read(), os.path.basename(section_filename))
+
+    bib_path = get_full_path("references.bib")
+    if os.path.exists(bib_path):
+        with open(bib_path, "r") as f:
+            st.download_button(f"📥 Download CUMULATIVE references.bib", f.read(), "references.bib")
 
     if chapter == 1 and section == 20:
         with open(chapter_filename, "a") as f:
             f.write(r"\end{document}")
-        chapter_bib = f"chapter_{chapter}.bib"
+        chapter_bib = get_full_path(f"chapter_{chapter}.bib")
         with open(chapter_bib, "w") as f:
-            f.write(open(bib_filename, "r").read() if os.path.exists(bib_filename) else "")
-        with open(chapter_filename, "r") as f:
-            st.download_button(f"📥 Download FULL Chapter {chapter}.tex", f.read(), chapter_filename)
-        with open(chapter_bib, "r") as f:
-            st.download_button(f"📥 Download FULL Chapter {chapter}.bib", f.read(), chapter_bib)
+            if os.path.exists(bib_path):
+                f.write(open(bib_path, "r").read())
+        zip_filename = get_full_path("chapter_1_full.zip")
+        with zipfile.ZipFile(zip_filename, "w") as zipf:
+            for ch, sec, fname in st.session_state.completed_sections:
+                zipf.write(fname, os.path.basename(fname))
+            zipf.write(chapter_filename, os.path.basename(chapter_filename))
+            zipf.write(chapter_bib, os.path.basename(chapter_bib))
         st.session_state.stage = "halted"
         st.rerun()
 
@@ -307,10 +385,11 @@ if st.session_state.stage == "writing":
         if line.strip():
             latex_preview.code(line, language="latex")
             time.sleep(0.08)
-    for line in open(bib_filename, "r").read().split("\n"):
-        if line.strip():
-            bib_preview.code(line, language="bibtex")
-            time.sleep(0.08)
+    if os.path.exists(bib_path):
+        for line in open(bib_path, "r").read().split("\n"):
+            if line.strip():
+                bib_preview.code(line, language="bibtex")
+                time.sleep(0.08)
 
     st.session_state.current_section += 1
     if st.session_state.current_section > 20:
@@ -318,7 +397,6 @@ if st.session_state.stage == "writing":
         st.session_state.current_chapter += 1
     else:
         st.rerun()
-
     st.stop()
 
 if st.session_state.stage == "halted":
@@ -329,10 +407,36 @@ if st.session_state.stage == "halted":
       <source src="https://www.soundjay.com/buttons/beep-07.mp3" type="audio/mpeg">
     </audio>
     """, unsafe_allow_html=True)
-    st.info("All files for Chapter 1 are ready. Use the download buttons below.")
+
+    chapter_filename = get_full_path("chapter_1.tex")
+    if os.path.exists(chapter_filename):
+        with open(chapter_filename, "r") as f:
+            st.download_button("📥 Download FULL Chapter 1.tex", f.read(), "chapter_1.tex")
+
+    chapter_bib = get_full_path("chapter_1.bib")
+    if os.path.exists(chapter_bib):
+        with open(chapter_bib, "r") as f:
+            st.download_button("📥 Download FULL Chapter 1.bib", f.read(), "chapter_1.bib")
+
+    refs_bib = get_full_path("references.bib")
+    if os.path.exists(refs_bib):
+        with open(refs_bib, "r") as f:
+            st.download_button("📥 Download CUMULATIVE references.bib", f.read(), "references.bib")
+
+    zip_path = get_full_path("chapter_1_full.zip")
+    if os.path.exists(zip_path):
+        with open(zip_path, "rb") as f:
+            st.download_button("📥 Download ALL Chapter 1 Files (ZIP)", f.read(), "chapter_1_full.zip")
+
     for ch, sec, fname in st.session_state.completed_sections:
         with open(fname, "r") as f:
-            st.download_button(f"📥 Download Section {ch}.{sec}.tex", f.read(), fname)
+            st.download_button(f"📥 Download Section {ch}.{sec}.tex", f.read(), os.path.basename(fname))
+
+    if st.button("✅ Chapter 1 complete — Continue to Chapters 2–10", type="primary"):
+        st.session_state.current_chapter = 2
+        st.session_state.current_section = 1
+        st.session_state.stage = "writing"
+        st.rerun()
     st.stop()
 
-st.caption("💡 Version 96.0 — Persistent section downloads + HALT after Chapter 1")
+st.caption("💡 Version 102.0 — All sections now use full real titles (pure Python)")
