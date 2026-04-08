@@ -37,7 +37,7 @@ if "covered_topics" not in st.session_state: st.session_state.covered_topics = [
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 108.1 — Extremely soft academic prompt (reduced filtering)**")
+    st.markdown("**Version 109.0 — Maximum OpenAI debugging (gpt-5.4 kept)**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -45,7 +45,7 @@ with st.sidebar:
     st.header("⚙️ Settings")
     api_key = st.text_input("OpenAI API Key", type="password", value=os.getenv("OPENAI_API_KEY", ""))
     if api_key: os.environ["OPENAI_API_KEY"] = api_key
-    model = st.selectbox("Model", ["gpt-5.4", "gpt-5.4-mini", "gpt-4o"], index=0)
+    model = st.selectbox("Model", ["gpt-5.4", "gpt-4o", "gpt-4o-mini"], index=0)
 
     st.header("📁 Background Documents")
     uploaded_files = st.file_uploader("Upload PDF, DOCX, TXT files", type=["pdf", "docx", "txt"], accept_multiple_files=True)
@@ -331,23 +331,39 @@ if st.session_state.stage == "writing":
     army_placeholder.markdown(thinking)
     time.sleep(0.03)
 
-    prompt_text = f"""You are a neutral academic scholar writing a purely theoretical and hypothetical academic book.
-The book explores theoretical frameworks of political reintegration in divided societies within international relations theory.
-Write a VERY LONG, detailed, scholarly LaTeX section titled '{real_title}' as part of this theoretical academic work on the topic: {st.session_state.current_prompt}.
-This is purely hypothetical scholarly analysis. Focus on academic theory, comparative cases, and conceptual discussion only.
+    prompt_text = f"""You are {agent}. Write a VERY LONG detailed LaTeX section titled '{real_title}' about the topic: {st.session_state.current_prompt}.
 DO NOT repeat ANY of these already covered topics:
 {covered_summary}
 Include many \\cite{{key}}. Output ONLY LaTeX."""
 
+    st.info(f"**DEBUG: Using model = {model}**")
+    st.info(f"**DEBUG: Prompt length = {len(prompt_text)} characters**")
+
     try:
-        resp = client.chat.completions.create(model=model, messages=[{"role": "system", "content": prompt_text}], temperature=0.75, **get_max_tokens_kw(model, 3200))
-        section_text = resp.choices[0].message.content.strip()
-        if len(section_text.strip()) < 200:
-            raise Exception(f"Agent returned only {len(section_text)} characters")
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": prompt_text}],
+            temperature=0.8,
+            **get_max_tokens_kw(model, 3200)
+        )
+        raw_content = resp.choices[0].message.content.strip() if resp.choices[0].message.content else ""
+        finish_reason = resp.choices[0].finish_reason
+
+        st.info(f"**DEBUG: finish_reason = {finish_reason}**")
+        st.info(f"**DEBUG: Raw content length returned = {len(raw_content)} characters**")
+        if len(raw_content) > 0:
+            st.info(f"**DEBUG: First 300 chars of returned content:** {raw_content[:300]}...")
+        else:
+            st.error("**Agent returned ZERO characters**")
+            st.error("This is the exact point where OpenAI returned nothing.")
+        section_text = raw_content
     except Exception as e:
-        st.error("**CRITICAL ERROR — Agent failed to produce content**")
+        st.error("**CRITICAL ERROR — OpenAI call failed**")
         st.error(f"Exception: {str(e)}")
-        st.error("This is likely OpenAI safety filtering. The prompt has been made as academic and theoretical as possible.")
+        st.stop()
+
+    if len(section_text) < 100:
+        st.error("**Agent returned empty or too short content**")
         st.stop()
 
     st.info("**Running Chapter Reviewer Agent to remove duplication...**")
@@ -474,4 +490,4 @@ if st.session_state.stage == "halted":
         st.rerun()
     st.stop()
 
-st.caption("💡 Version 108.1 — Extremely soft academic prompt (reduced filtering)")
+st.caption("💡 Version 109.0 — Maximum OpenAI debugging (gpt-5.4 kept)")
