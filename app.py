@@ -32,11 +32,12 @@ if "section_titles" not in st.session_state: st.session_state.section_titles = {
 if "completed_sections" not in st.session_state: st.session_state.completed_sections = []
 if "run_id" not in st.session_state: st.session_state.run_id = None
 if "run_folder" not in st.session_state: st.session_state.run_folder = None
+if "covered_topics" not in st.session_state: st.session_state.covered_topics = []
 
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 102.0 — All sections now use full real titles (pure Python)**")
+    st.markdown("**Version 103.0 — Hybrid deduplication (prevention + local cleaning) + 15 sections + 1 agent**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -55,13 +56,12 @@ else:
     client = None
     st.sidebar.error("⚠️ Please enter your OpenAI API Key above")
 
-PERSONAS = ["Professor at Harvard", "Professor at MIT"] * 100
+PERSONAS = ["Professor at Harvard University"]
 col_left, col_right = st.columns([3, 2])
 
 with col_left:
     army_placeholder = st.empty()
 
-# RECOVERY PANEL
 st.sidebar.header("🔄 All Previous Runs")
 if os.path.exists("runs"):
     for folder in sorted(os.listdir("runs"), reverse=True):
@@ -97,6 +97,7 @@ if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.current_section = 1
     st.session_state.section_titles = {}
     st.session_state.completed_sections = []
+    st.session_state.covered_topics = []
     st.session_state.run_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     st.session_state.run_folder = f"runs/run_{st.session_state.run_id}"
     os.makedirs(st.session_state.run_folder, exist_ok=True)
@@ -106,11 +107,10 @@ def parse_section_titles(outline_text):
     titles = {}
     for line in outline_text.splitlines():
         line = line.strip()
-        # Multiple robust patterns – pure Python, no OpenAI
         patterns = [
-            r'^\s*(\d+)\.(\d+)\s*[.\-–—]?\s*(.+)',           # 1.1 The Life of Brian
-            r'^\s*\**\s*(\d+)\.(\d+)\s*[.\-–—]?\s*(.+)',    # **1.1 The Life of Brian
-            r'^\s*(\d+)\.(\d+)\s*[:\-–—]?\s*(.+)',          # 1.1: The Life of Brian
+            r'^\s*(\d+)\.(\d+)\s*[.\-–—]?\s*(.+)', 
+            r'^\s*\**\s*(\d+)\.(\d+)\s*[.\-–—]?\s*(.+)', 
+            r'^\s*(\d+)\.(\d+)\s*[:\-–—]?\s*(.+)', 
             r'^\s*Section\s*(\d+)\.(\d+)\s*[:\-–—]?\s*(.+)', 
             r'^\s*Chapter\s*(\d+)\s*Section\s*(\d+)\s*[:\-–—]?\s*(.+)', 
         ]
@@ -200,12 +200,38 @@ def read_uploaded_file(uploaded_file):
         return "\n".join(p.text for p in doc.paragraphs)
     return ""
 
+def get_full_path(filename):
+    return f"{st.session_state.run_folder}/{filename}"
+
+def jaccard_similarity(a, b):
+    set_a = set(a.lower().split())
+    set_b = set(b.lower().split())
+    if not set_a or not set_b: return 0.0
+    return len(set_a & set_b) / len(set_a | set_b)
+
+def deduplicate_chapter(chapter_filename):
+    st.info("**Running post-chapter local deduplication (pure Python)**")
+    with open(chapter_filename, "r") as f:
+        full_text = f.read()
+    paragraphs = [p.strip() for p in full_text.split("\n\n") if p.strip() and len(p.strip()) > 30]
+    kept = []
+    for p in paragraphs:
+        is_duplicate = False
+        for kept_p in kept:
+            if jaccard_similarity(p, kept_p) > 0.82:
+                st.info(f"**Paragraph deleted (duplicate):** {p[:120]}...")
+                is_duplicate = True
+                break
+        if not is_duplicate:
+            kept.append(p)
+    new_text = "\n\n".join(kept)
+    with open(chapter_filename, "w") as f:
+        f.write(new_text)
+    st.info("**Chapter deduplication completed**")
+
 if uploaded_files:
     background_corpus = "".join(read_uploaded_file(f) + "\n\n" for f in uploaded_files)
     st.sidebar.success(f"Loaded {len(uploaded_files)} background documents")
-
-def get_full_path(filename):
-    return f"{st.session_state.run_folder}/{filename}"
 
 if st.session_state.stage == "outline":
     with col_left:
@@ -233,8 +259,8 @@ Output EXACTLY in this format (nothing else):
 1.2 Title of second section
 ...
 ## Chapter 10
-10.19 Title
-10.20 Title"""}],
+10.14 Title
+10.15 Title"""}],
                     temperature=0.7,
                     **get_max_tokens_kw(model, 3000)
                 )
@@ -246,7 +272,7 @@ Output EXACTLY in this format (nothing else):
                 st.warning(f"Attempt {attempt+1} failed: {str(e)}")
                 time.sleep(2)
         if not success:
-            st.session_state.outline = "# Hard Fallback Outline\n## Chapter 1\n1.1 Early Life and Education of Alan Turing\n... (20 sections per chapter) ..."
+            st.session_state.outline = "# Hard Fallback Outline\n## Chapter 1\n1.1 Early Life and Education of Alan Turing\n... (15 sections per chapter) ..."
     st.session_state.stage = "approve"
     st.rerun()
 
@@ -286,35 +312,33 @@ if st.session_state.stage == "writing":
     chapter = st.session_state.current_chapter
     section = st.session_state.current_section
     real_title = st.session_state.section_titles.get((chapter, section), f"Section {section}")
-    st.info(f"**Using full section title:** {real_title}")   # ← debug line so you can see it
+    st.info(f"**CURRENTLY WRITING FULL SECTION TITLE: Chapter {chapter} - Section {section} — {real_title}**")
 
-    # ... rest of the agent drafting, synthesizer, reviewer, citation handler, sanitization functions exactly as in v101.0 ...
+    covered_summary = "\n".join(st.session_state.covered_topics) if st.session_state.covered_topics else "None yet"
+    st.info(f"**Covered Topics Summary so far (no repetition allowed):**\n{covered_summary}")
 
-    agents = ["Professor at Harvard", "Professor at MIT"]
-    drafts = []
-    latest_agents = []
-    for persona in agents:
-        agent_id = f"Agent #{random.randint(1000,9999)}"
-        thinking = f"• {agent_id} — {persona} thinks: Drafting '{real_title}'..."
-        latest_agents.append(thinking)
-        if len(latest_agents) > 3: latest_agents.pop(0)
-        army_placeholder.markdown("\n\n".join(latest_agents))
-        time.sleep(0.03)
-        try:
-            resp = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"You are {persona}. Write a VERY LONG detailed LaTeX section titled '{real_title}' about Alan Turing only. Include many \\cite{{key}}. Output ONLY LaTeX."}], temperature=0.8, **get_max_tokens_kw(model, 2500))
-            drafts.append(resp.choices[0].message.content.strip())
-        except Exception as e:
-            st.error(f"❌ {persona} failed: {str(e)}")
-            drafts.append("")
-    st.info("✅ 2 agents completed — running synthesizer...")
+    agent = "Professor at Harvard University"
+    agent_id = f"Agent #{random.randint(1000,9999)}"
+    thinking = f"• {agent_id} — {agent} thinks: Drafting '{real_title}' (avoiding covered topics)..."
+    army_placeholder.markdown(thinking)
+    time.sleep(0.03)
 
-    synth_prompt = f"""Combine these 2 drafts into ONE long, detailed LaTeX section for the exact title '{real_title}'. Write ONLY about Alan Turing. NEVER return empty text. Output ONLY LaTeX.\n\n""" + "\n\n---\n\n".join(drafts)
-    synth = client.chat.completions.create(model=model, messages=[{"role": "system", "content": synth_prompt}], temperature=0.7, **get_max_tokens_kw(model, 3500))
-    section_text = synth.choices[0].message.content.strip()
+    prompt_text = f"""You are {agent}. Write a VERY LONG detailed LaTeX section titled '{real_title}' about Alan Turing only.
+DO NOT repeat ANY of these already covered topics:
+{covered_summary}
+Include many \\cite{{key}}. Output ONLY LaTeX."""
+
+    try:
+        resp = client.chat.completions.create(model=model, messages=[{"role": "system", "content": prompt_text}], temperature=0.8, **get_max_tokens_kw(model, 2500))
+        section_text = resp.choices[0].message.content.strip()
+    except Exception as e:
+        st.error(f"❌ Agent failed: {str(e)}")
+        section_text = ""
 
     if len(section_text) < 500:
-        st.error("⚠️ Synthesizer returned nothing — HARD FALLBACK")
-        fallback = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"Write a VERY LONG detailed LaTeX section about Alan Turing titled '{real_title}'. Include many \\cite{{key}}."}], temperature=0.7, **get_max_tokens_kw(model, 4000))
+        st.error("⚠️ Agent returned nothing — HARD FALLBACK")
+        fallback_prompt = f"""Write a VERY LONG detailed LaTeX section about Alan Turing titled '{real_title}'. Include many \\cite{{key}}. Output ONLY LaTeX."""
+        fallback = client.chat.completions.create(model=model, messages=[{"role": "system", "content": fallback_prompt}], temperature=0.7, **get_max_tokens_kw(model, 4000))
         section_text = fallback.choices[0].message.content.strip()
 
     st.info("**Running Chapter Reviewer Agent to remove duplication...**")
@@ -365,7 +389,14 @@ if st.session_state.stage == "writing":
         with open(bib_path, "r") as f:
             st.download_button(f"📥 Download CUMULATIVE references.bib", f.read(), "references.bib")
 
-    if chapter == 1 and section == 20:
+    # Update Covered Topics Summary
+    first_sentences = clean_section.split(".")[:3]
+    summary_line = f"Section {chapter}.{section} — {real_title}: " + ". ".join(first_sentences) + "."
+    st.session_state.covered_topics.append(summary_line)
+    st.info(f"**Updated Covered Topics Summary (now {len(st.session_state.covered_topics)} entries):** {summary_line}")
+
+    if chapter == 1 and section == 15:
+        deduplicate_chapter(chapter_filename)
         with open(chapter_filename, "a") as f:
             f.write(r"\end{document}")
         chapter_bib = get_full_path(f"chapter_{chapter}.bib")
@@ -392,7 +423,7 @@ if st.session_state.stage == "writing":
                 time.sleep(0.08)
 
     st.session_state.current_section += 1
-    if st.session_state.current_section > 20:
+    if st.session_state.current_section > 15:
         st.session_state.current_section = 1
         st.session_state.current_chapter += 1
     else:
@@ -439,4 +470,4 @@ if st.session_state.stage == "halted":
         st.rerun()
     st.stop()
 
-st.caption("💡 Version 102.0 — All sections now use full real titles (pure Python)")
+st.caption("💡 Version 103.0 — Hybrid deduplication (prevention + local cleaning) + 15 sections + 1 agent")
