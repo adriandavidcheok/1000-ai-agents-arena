@@ -34,8 +34,8 @@ for key in ["stage", "current_prompt", "outline", "current_chapter", "current_se
 
 st.title("🌀 1000 AI Agents Arena")
 st.caption("Live in your browser • Powered by OpenRouter")
-st.markdown("**Version 139.0 — Prompt bar fixed + FREE qwen/qwen3-coder:free**")
-st.info("✅ Type your book topic in the box at the very bottom of the page.")
+st.markdown("**Version 139.0 — FREE Google Gemini Flash model (google/gemini-2.0-flash:free)**")
+st.info("✅ Switched to a different free model to avoid rate limits.")
 
 if st.session_state.current_prompt:
     st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
@@ -45,13 +45,13 @@ with st.sidebar:
     st.header("⚙️ Settings")
     openrouter_key = st.text_input("OpenRouter API Key", type="password", value="")
     model = st.selectbox("OpenRouter Model", 
-                         ["qwen/qwen3-coder:free",
+                         ["google/gemini-2.0-flash:free",
+                          "qwen/qwen3-coder:free",
                           "nousresearch/hermes-3-llama-3.1-405b:free",
                           "openai/gpt-4o-mini",
-                          "openai/gpt-4o",
-                          "anthropic/claude-3.5-sonnet"], 
+                          "openai/gpt-4o"], 
                          index=0)
-    st.caption("💰 FREE qwen/qwen3-coder:free is selected by default")
+    st.caption("💰 FREE Gemini Flash is selected by default")
     st.header("📁 Background Documents")
     uploaded_files = st.file_uploader("Upload PDF, DOCX, TXT files", type=["pdf", "docx", "txt"], accept_multiple_files=True)
 
@@ -255,10 +255,8 @@ if uploaded_files:
     st.session_state.background_corpus = "\n\n".join(background_texts)
     st.sidebar.success(f"Loaded {len(uploaded_files)} background documents")
 
-# Chat input — ALWAYS SHOWN AT THE BOTTOM
-prompt = st.chat_input("Ask the swarm anything... (e.g. Please write an academic book about chickens)")
-
-if prompt:
+# Chat input — ALWAYS AT BOTTOM
+if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.current_prompt = prompt
     st.session_state.stage = "outline"
     st.session_state.current_chapter = 1
@@ -478,4 +476,4 @@ if st.session_state.stage == "halted":
         st.session_state.stage = "writing"
         st.rerun()
 
-st.caption("💡 Version 139.0 — Full code with prompt bar fixed. Hard-refresh the page.")
+st.caption("💡 Version 139.0 — Paste this complete code and hard-refresh the page.")
