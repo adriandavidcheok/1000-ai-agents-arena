@@ -34,8 +34,8 @@ for key in ["stage", "current_prompt", "outline", "current_chapter", "current_se
 
 st.title("🌀 1000 AI Agents Arena")
 st.caption("Live in your browser • Powered by OpenRouter")
-st.markdown("**Version 135.0 — FREE Hermes model (nousresearch/hermes-3-llama-3.1-405b:free)**")
-st.info("✅ Using the exact FREE Hermes model you requested.")
+st.markdown("**Version 136.0 — New key hardcoded + FREE Hermes model**")
+st.info("✅ Using FREE `nousresearch/hermes-3-llama-3.1-405b:free`")
 
 if st.session_state.current_prompt:
     st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
@@ -51,13 +51,13 @@ with st.sidebar:
                           "anthropic/claude-3.5-sonnet",
                           "x-ai/grok-3"], 
                          index=0)
-    st.caption("💰 **FREE Hermes model is now the default**")
+    st.caption("💰 FREE Hermes model is selected by default")
     st.header("📁 Background Documents")
     uploaded_files = st.file_uploader("Upload PDF, DOCX, TXT files", type=["pdf", "docx", "txt"], accept_multiple_files=True)
 
-# OpenRouter client with your key
+# OpenRouter client with your NEW key hardcoded
 client = OpenAI(
-    api_key="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",
+    api_key="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",
     base_url="https://openrouter.ai/api/v1"
 )
 
@@ -324,8 +324,155 @@ Use this exact format:
     st.session_state.stage = "approve"
     st.rerun()
 
-# APPROVE STAGE, WRITING STAGE, HALTED STAGE — identical to previous versions (full logging remains)
+# APPROVE STAGE
+if st.session_state.stage == "approve":
+    st.info("✅ ENTERED APPROVE STAGE")
+    st.subheader("✅ Proposed Book Outline")
+    st.markdown(f'<div class="outline-text">{st.session_state.outline}</div>', unsafe_allow_html=True)
+    if st.session_state.outline:
+        with open(f"{st.session_state.run_folder}/outline.txt", "w") as f:
+            f.write(st.session_state.outline)
+        with open(f"{st.session_state.run_folder}/outline.txt", "r") as f:
+            st.download_button("📥 Download outline.txt", f.read(), "outline.txt")
 
-# (The approve, writing, and halted stages are exactly the same as in the last version you had.)
+    st.info("**Please review the outline above and click Yes or No**")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("✅ Yes, proceed to write the full book", type="primary"):
+            st.session_state.section_titles = parse_section_titles(st.session_state.outline)
+            st.session_state.stage = "writing"
+            st.rerun()
+    with col2:
+        if st.button("🔄 No, generate a new outline"):
+            st.session_state.outline = None
+            st.success("Outline not approved. Generating a new one…")
+            st.session_state.stage = "outline"
+            st.rerun()
 
-st.caption("💡 Version 135.0 — FREE Hermes model active. Paste this complete code and hard-refresh the page.")
+# WRITING STAGE
+if st.session_state.stage == "writing":
+    st.info("✅ ENTERED WRITING STAGE")
+    with col_left:
+        st.subheader("🔥 AI Army is writing the full book chapter by chapter...")
+        st.markdown('<div class="pacman-container"><span class="pacman">🟡</span> <span style="color:#ffcc00; font-weight:bold;">The AI Army is hard at work writing your book...</span></div>', unsafe_allow_html=True)
+        latest_agents = []
+        for i in range(80):
+            persona = random.choice(PERSONAS)
+            agent_id = f"Agent #{random.randint(1000,9999)}"
+            thought = f"• {agent_id} — {persona} thinks: Writing section..."
+            latest_agents.append(thought)
+            if len(latest_agents) > 3: latest_agents.pop(0)
+            army_placeholder.markdown("\n\n".join(latest_agents))
+            time.sleep(0.08)
+
+    chapter = st.session_state.current_chapter
+    section = st.session_state.current_section
+    real_title = st.session_state.section_titles.get((chapter, section), f"Section {section}")
+    st.info(f"**CURRENTLY WRITING FULL SECTION TITLE: Chapter {chapter} - Section {section} — {real_title}**")
+
+    covered_summary = "\n".join(st.session_state.covered_topics) if st.session_state.covered_topics else "None yet"
+    st.info(f"**Covered Topics Summary (no repetition):** {covered_summary}")
+
+    agent = "Professor at Harvard University"
+    agent_id = f"Agent #{random.randint(1000,9999)}"
+    st.info(f"• {agent_id} — {agent} is drafting '{real_title}'...")
+
+    prompt_text = f"""You are {agent}. Write a VERY LONG detailed LaTeX section titled '{real_title}' about the topic: {st.session_state.current_prompt}.
+DO NOT repeat ANY of these already covered topics:
+{covered_summary}
+Background corpus (use only if relevant):
+{st.session_state.background_corpus[:4000] if st.session_state.background_corpus else "None"}
+Include many \\cite{{key}}. Output ONLY LaTeX."""
+
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": prompt_text}],
+            temperature=0.8,
+            max_tokens=3200
+        )
+        section_text = resp.choices[0].message.content.strip()
+    except Exception as e:
+        st.error(f"OpenAI error: {str(e)}")
+        st.stop()
+
+    if len(section_text) < 100:
+        st.error("Agent returned empty or too short content")
+        st.stop()
+
+    st.info("Applying desktop sanitization functions...")
+    clean_section = to_ascii(section_text)
+    clean_section = sanitize_latex_output_for_tex(clean_section)
+    clean_section = remove_robotic_paragraph_openers(clean_section)
+    clean_section = ensure_subsection_ends_cleanly(client, model, clean_section)
+    clean_section = strip_document_wrapper(clean_section)
+
+    clean_section = f"\\section{{{real_title}}}\n\n" + clean_section
+
+    section_filename = get_full_path(f"chapter_{chapter}_section_{section}.tex")
+    with open(section_filename, "w") as f:
+        f.write(clean_section)
+
+    chapter_filename = get_full_path(f"chapter_{chapter}.tex")
+    with open(chapter_filename, "a") as f:
+        if section == 1:
+            f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{Chapter " + str(chapter) + "}\maketitle\n\n")
+        f.write(clean_section + "\n\n")
+
+    keys = extract_citation_keys(clean_section)
+    append_bibtex_entries(keys, st.session_state.current_prompt)
+
+    st.session_state.completed_sections.append((chapter, section, section_filename))
+
+    st.download_button(f"📥 Download Section {chapter}.{section}.tex", open(section_filename, "r").read(), os.path.basename(section_filename))
+
+    first_sentences = clean_section.split(".")[:3]
+    summary_line = f"Section {chapter}.{section} — {real_title}: " + ". ".join(first_sentences) + "."
+    st.session_state.covered_topics.append(summary_line)
+
+    with col_right:
+        st.subheader("📜 Live LaTeX Preview")
+        latex_preview = st.empty()
+        for line in clean_section.split("\n"):
+            if line.strip():
+                latex_preview.code(line, language="latex")
+                time.sleep(0.08)
+
+    st.session_state.current_section += 1
+    if st.session_state.current_section > 15:
+        deduplicate_chapter(chapter_filename)
+        latex_cleanup_for_chapter(chapter_filename)
+        with open(chapter_filename, "a") as f:
+            f.write(r"\end{document}")
+        st.session_state.stage = "halted"
+        st.rerun()
+    else:
+        st.rerun()
+
+# HALTED STAGE
+if st.session_state.stage == "halted":
+    st.success("🚨 HALT — Chapter 1 is fully finished!")
+    st.balloons()
+    st.markdown('<audio autoplay><source src="https://www.soundjay.com/buttons/beep-07.mp3" type="audio/mpeg"></audio>', unsafe_allow_html=True)
+
+    chapter_filename = get_full_path("chapter_1.tex")
+    if os.path.exists(chapter_filename):
+        with open(chapter_filename, "r") as f:
+            st.download_button("📥 Download FULL Chapter 1.tex", f.read(), "chapter_1.tex")
+
+    bib_path = get_full_path("references.bib")
+    if os.path.exists(bib_path):
+        with open(bib_path, "r") as f:
+            st.download_button("📥 Download CUMULATIVE references.bib", f.read(), "references.bib")
+
+    for ch, sec, fname in st.session_state.completed_sections:
+        with open(fname, "r") as f:
+            st.download_button(f"📥 Download Section {ch}.{sec}.tex", f.read(), os.path.basename(fname))
+
+    if st.button("✅ Continue to Chapters 2–10"):
+        st.session_state.current_chapter = 2
+        st.session_state.current_section = 1
+        st.session_state.stage = "writing"
+        st.rerun()
+
+st.caption("💡 Version 136.0 — New key hardcoded + FREE Hermes model. Paste this complete code and hard-refresh the page.")
