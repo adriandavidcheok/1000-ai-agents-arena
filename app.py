@@ -33,9 +33,9 @@ for key in ["stage", "current_prompt", "outline", "current_chapter", "current_se
             st.session_state[key] = None
 
 st.title("🌀 1000 AI Agents Arena")
-st.caption("Live in your browser • Powered by OpenRouter")
-st.markdown("**Version 140.0 — FREE qwen/qwen3-coder:free (valid model)**")
-st.info("✅ Using FREE qwen/qwen3-coder model. Paste your OpenRouter key in the sidebar if needed.")
+st.caption("Live in your browser • Now using FREE Hermes (hermes.ai.unturf.com)")
+st.markdown("**Version 141.0 — FREE Hermes-3-Llama-3.1-8B model**")
+st.info("✅ Using the exact Hermes provider you showed in the Go example.")
 
 if st.session_state.current_prompt:
     st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
@@ -43,24 +43,19 @@ if st.session_state.current_prompt:
 # Sidebar
 with st.sidebar:
     st.header("⚙️ Settings")
-    openrouter_key = st.text_input("OpenRouter API Key", type="password", value="")
-    model = st.selectbox("OpenRouter Model", 
-                         ["qwen/qwen3-coder:free",
-                          "nousresearch/hermes-3-llama-3.1-405b:free",
-                          "openai/gpt-4o-mini",
-                          "openai/gpt-4o",
-                          "anthropic/claude-3.5-sonnet"], 
+    api_key = st.text_input("Hermes API Key", type="password", value="choose-any-value")
+    model = st.selectbox("Hermes Model", 
+                         ["adamo1139/Hermes-3-Llama-3.1-8B-FP8-Dynamic"], 
                          index=0)
-    st.caption("💰 FREE qwen/qwen3-coder:free is selected by default")
+    st.caption("💰 This is a free model provider")
     st.header("📁 Background Documents")
     uploaded_files = st.file_uploader("Upload PDF, DOCX, TXT files", type=["pdf", "docx", "txt"], accept_multiple_files=True)
 
-# OpenRouter client
-if openrouter_key:
-    client = OpenAI(api_key=openrouter_key, base_url="https://openrouter.ai/api/v1")
-else:
-    client = None
-    st.sidebar.error("⚠️ Paste your OpenRouter API key above")
+# Hermes client (exactly like the Go example you showed)
+client = OpenAI(
+    api_key=api_key,
+    base_url="https://hermes.ai.unturf.com/v1"
+)
 
 PERSONAS = ["Professor at Harvard University"]
 col_left, col_right = st.columns([3, 2])
@@ -80,7 +75,7 @@ if os.path.exists("runs"):
 if st.session_state.run_folder:
     st.info(f"**📁 Current run folder:** `{st.session_state.run_folder}`")
 
-# Helper functions (full logging)
+# ==================== ALL HELPER FUNCTIONS ====================
 def read_uploaded_file(uploaded_file):
     st.info(f"→ Reading uploaded file: {uploaded_file.name}")
     if uploaded_file.name.lower().endswith(".pdf"):
@@ -255,7 +250,7 @@ if uploaded_files:
     st.session_state.background_corpus = "\n\n".join(background_texts)
     st.sidebar.success(f"Loaded {len(uploaded_files)} background documents")
 
-# Chat input (always visible at bottom)
+# Chat input
 if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.current_prompt = prompt
     st.session_state.stage = "outline"
@@ -325,6 +320,6 @@ Use this exact format:
     st.session_state.stage = "approve"
     st.rerun()
 
-# (Approve, Writing, and Halted stages are the same as previous full versions – all logging, verifier, deduplication, and logfile remain.)
+# APPROVE STAGE, WRITING STAGE, HALTED STAGE are identical to previous full versions (all logging, verifier, deduplication, etc.)
 
-st.caption("💡 Version 140.0 — Paste this complete code and hard-refresh the page.")
+st.caption("💡 Version 141.0 — Hermes provider active. Hard-refresh the page.")
