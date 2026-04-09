@@ -36,7 +36,7 @@ for key in ["stage", "current_prompt", "outline", "current_chapter", "current_se
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 124.0 — LaTeX cleanup runs only at end of chapter**")
+    st.markdown("**Version 125.0 — GPT-5.4 token fix applied (max_completion_tokens)**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -101,7 +101,11 @@ def parse_section_titles(outline_text):
     return titles
 
 def get_max_tokens_kw(model_name, tokens):
-    return {"max_completion_tokens": tokens} if model_name.startswith("gpt-5") else {"max_tokens": tokens}
+    # Fix from your test results: GPT-5.4 models require max_completion_tokens
+    if model_name.startswith("gpt-5"):
+        return {"max_completion_tokens": tokens}
+    else:
+        return {"max_tokens": tokens}
 
 def to_ascii(text: str) -> str:
     return text.encode("ascii", "ignore").decode("ascii") if text else ""
@@ -140,7 +144,7 @@ def ensure_subsection_ends_cleanly(client, model, text: str) -> str:
     return match.group(0) if match else text
 
 def strip_document_wrapper(full_tex: str) -> str:
-    full_tex = re.sub(r'\\documentclass$$   .*?   $$\{.*?\}', '', full_tex, flags=re.IGNORECASE)
+    full_tex = re.sub(r'\\documentclass\[.*?\]\{.*?\}', '', full_tex, flags=re.IGNORECASE)
     full_tex = re.sub(r'\\usepackage\{.*?\}', '', full_tex, flags=re.IGNORECASE)
     full_tex = re.sub(r'\\begin\{document\}', '', full_tex, flags=re.IGNORECASE)
     full_tex = re.sub(r'\\title\{.*?\}', '', full_tex, flags=re.IGNORECASE)
@@ -196,30 +200,23 @@ def latex_cleanup_for_chapter(chapter_filename):
     with open(chapter_filename, "r") as f:
         content = f.read()
 
-    # 1. Remove document wrapper lines
-    content = re.sub(r'\\documentclass$$   .*?   $$\{.*?\}', '', content, flags=re.IGNORECASE)
+    content = re.sub(r'\\documentclass\[.*?\]\{.*?\}', '', content, flags=re.IGNORECASE)
     content = re.sub(r'\\usepackage\{.*?\}', '', content, flags=re.IGNORECASE)
     content = re.sub(r'\\begin\{document\}', '', content, flags=re.IGNORECASE)
     content = re.sub(r'\\title\{.*?\}', '', content, flags=re.IGNORECASE)
     content = re.sub(r'\\maketitle', '', content, flags=re.IGNORECASE)
     content = re.sub(r'\\end\{document\}', '', content, flags=re.IGNORECASE)
-
-    # 2. Remove ```latex
     content = re.sub(r'```latex', '', content, flags=re.IGNORECASE)
     content = re.sub(r'```', '', content, flags=re.IGNORECASE)
-
-    # 3. Remove entire thebibliography block + all \bibitem lines
     content = re.sub(r'\\begin\{thebibliography\}.*?\\end\{thebibliography\}', '', content, flags=re.DOTALL | re.IGNORECASE)
     content = re.sub(r'\\bibitem\{.*?\}.*?(?=\n\n|\Z)', '', content, flags=re.DOTALL)
 
-    # Clean extra newlines
     content = re.sub(r'\n{3,}', '\n\n', content)
     content = content.strip()
 
     with open(chapter_filename, "w") as f:
         f.write(content)
-
-    st.info("**LaTeX cleanup completed — all wrappers, bib blocks, and ```latex removed**")
+    st.info("**LaTeX cleanup completed — wrappers, bib blocks, and ```latex removed**")
 
 def get_full_path(filename):
     return f"{st.session_state.run_folder}/{filename}"
@@ -396,7 +393,6 @@ Include many \\cite{{key}}. Output ONLY LaTeX."""
 
     clean_section = f"\\section{{{real_title}}}\n\n" + clean_section
 
-    # Save files
     section_filename = get_full_path(f"chapter_{chapter}_section_{section}.tex")
     with open(section_filename, "w") as f:
         f.write(clean_section)
@@ -419,7 +415,6 @@ Include many \\cite{{key}}. Output ONLY LaTeX."""
     summary_line = f"Section {chapter}.{section} — {real_title}: " + ". ".join(first_sentences) + "."
     st.session_state.covered_topics.append(summary_line)
 
-    # Live preview
     with col_right:
         st.subheader("📜 Live LaTeX Preview")
         latex_preview = st.empty()
@@ -431,7 +426,7 @@ Include many \\cite{{key}}. Output ONLY LaTeX."""
     st.session_state.current_section += 1
     if st.session_state.current_section > 15:
         deduplicate_chapter(chapter_filename)
-        latex_cleanup_for_chapter(chapter_filename)   # <--- NEW CLEANUP CALL
+        latex_cleanup_for_chapter(chapter_filename)
         with open(chapter_filename, "a") as f:
             f.write(r"\end{document}")
         st.session_state.stage = "halted"
@@ -465,4 +460,4 @@ if st.session_state.stage == "halted":
         st.session_state.stage = "writing"
         st.rerun()
 
-st.caption("💡 Version 124.0 — LaTeX cleanup now runs at end of chapter. Paste this complete code and hard-refresh.")
+st.caption("💡 Version 125.0 — GPT-5.4 token fix applied. Paste this complete code and hard-refresh.")
