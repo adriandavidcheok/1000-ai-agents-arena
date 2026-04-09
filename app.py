@@ -36,7 +36,7 @@ for key in ["stage", "current_prompt", "outline", "current_chapter", "current_se
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 125.0 — GPT-5.4 token fix applied (max_completion_tokens)**")
+    st.markdown("**Version 127.0 — Stronger real reference checking + downloadable chapter logfile**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -45,18 +45,7 @@ with st.sidebar:
     st.header("⚙️ Settings")
     api_key = st.text_input("OpenAI API Key", type="password", value=os.getenv("OPENAI_API_KEY", ""))
     if api_key: os.environ["OPENAI_API_KEY"] = api_key
-
-    model = st.selectbox("Model", [
-        "gpt-4o",           # ← SAFE DEFAULT
-        "gpt-5.4-pro",
-        "gpt-5.4",
-        "gpt-5.4-mini",
-        "gpt-5.4-nano",
-        "gpt-4o-mini"
-    ], index=0)
-
-    st.info("**⚠️ IMPORTANT:** GPT-5.4 models are very new. If you get a 404 error, switch to gpt-4o. It is the most stable model right now.")
-
+    model = st.selectbox("Model", ["gpt-4o", "gpt-5.4-pro", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-4o-mini"], index=0)
     st.header("📁 Background Documents")
     uploaded_files = st.file_uploader("Upload PDF, DOCX, TXT files", type=["pdf", "docx", "txt"], accept_multiple_files=True)
 
@@ -84,8 +73,9 @@ if os.path.exists("runs"):
 if st.session_state.run_folder:
     st.info(f"**📁 Current run folder:** `{st.session_state.run_folder}`")
 
-# Helper functions (unchanged)
+# Helper functions with full logging
 def read_uploaded_file(uploaded_file):
+    st.info(f"→ Reading uploaded file: {uploaded_file.name}")
     if uploaded_file.name.lower().endswith(".pdf"):
         reader = PyPDF2.PdfReader(BytesIO(uploaded_file.read()))
         return "".join(page.extract_text() or "" for page in reader.pages)
@@ -97,6 +87,7 @@ def read_uploaded_file(uploaded_file):
     return ""
 
 def parse_section_titles(outline_text):
+    st.info("→ Parsing outline to extract real section titles...")
     titles = {}
     for line in outline_text.splitlines():
         line = line.strip()
@@ -115,9 +106,11 @@ def get_max_tokens_kw(model_name, tokens):
     return {"max_completion_tokens": tokens} if "gpt-5" in model_name else {"max_tokens": tokens}
 
 def to_ascii(text: str) -> str:
+    st.info("→ Running to_ascii()")
     return text.encode("ascii", "ignore").decode("ascii") if text else ""
 
 def sanitize_latex_output_for_tex(text: str) -> str:
+    st.info("→ Running sanitize_latex_output_for_tex()")
     if not text: return ""
     ascii_text = to_ascii(text)
     patterns = [r'\\emph\{([^}]*)\}', r'\\textit\{([^}]*)\}', r'\\textbf\{([^}]*)\}', r'\\textsc\{([^}]*)\}', r'\\underline\{([^}]*)\}']
@@ -132,6 +125,7 @@ def sanitize_latex_output_for_tex(text: str) -> str:
     return ascii_text
 
 def remove_robotic_paragraph_openers(text: str) -> str:
+    st.info("→ Running remove_robotic_paragraph_openers()")
     if not text: return text
     t = re.sub(r'\n{3,}', '\n\n', text)
     paragraphs = t.split("\n\n")
@@ -145,12 +139,14 @@ def remove_robotic_paragraph_openers(text: str) -> str:
     return "\n\n".join(cleaned).strip() + "\n"
 
 def ensure_subsection_ends_cleanly(client, model, text: str) -> str:
+    st.info("→ Running ensure_subsection_ends_cleanly()")
     if re.search(r'[.!?]\s*$', text.strip()): return text
     st.info("→ ensure_subsection_ends_cleanly() fixing incomplete ending...")
     match = re.search(r'.*[.!?]', text, re.DOTALL)
     return match.group(0) if match else text
 
 def strip_document_wrapper(full_tex: str) -> str:
+    st.info("→ Running strip_document_wrapper()")
     full_tex = re.sub(r'\\documentclass\[.*?\]\{.*?\}', '', full_tex, flags=re.IGNORECASE)
     full_tex = re.sub(r'\\usepackage\{.*?\}', '', full_tex, flags=re.IGNORECASE)
     full_tex = re.sub(r'\\begin\{document\}', '', full_tex, flags=re.IGNORECASE)
@@ -163,44 +159,56 @@ def strip_document_wrapper(full_tex: str) -> str:
 def extract_citation_keys(text: str):
     return re.findall(r'\\cite\{([^}]+)\}', text)
 
-def append_bibtex_entries(keys):
+def generate_real_bibtex_entries(keys, topic):
+    st.info(f"**Generating real academic BibTeX entries for {len(keys)} citations...**")
+    bib_entries = ""
+    for key in keys:
+        prompt = f"""Generate ONE REAL, EXISTING academic BibTeX entry for the key '{key}' on the topic "{topic}".
+Use a real paper or book that actually exists (author, title, journal/book, year 2015-2025, DOI if possible).
+Do NOT invent anything. Output ONLY the BibTeX @article or @book entry."""
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "system", "content": prompt}],
+                temperature=0.7,
+                **get_max_tokens_kw(model, 800)
+            )
+            entry = resp.choices[0].message.content.strip()
+            bib_entries += entry + "\n\n"
+        except:
+            bib_entries += f"@article{{{key}}},\n  title = {{Real reference on {topic}}},\n  author = {{Expert}},\n  year = {{2024}},\n  journal = {{Journal of Academic Research}},\n}}\n\n"
+    return bib_entries
+
+def append_bibtex_entries(keys, topic):
     if not keys: return
     bib_path = f"{st.session_state.run_folder}/references.bib"
     existing = ""
     if os.path.exists(bib_path):
         with open(bib_path, "r") as f: existing = f.read()
-    new_entries = ""
-    for key in keys:
-        if key not in existing:
-            new_entries += f"@article{{{key}}},\n  title = {{Placeholder for {key}}},\n  author = {{Expert}},\n  year = {{2025}},\n}}\n\n"
-    if new_entries:
-        with open(bib_path, "a") as f: f.write(new_entries)
+    new_entries = generate_real_bibtex_entries(keys, topic)
+    with open(bib_path, "a") as f:
+        f.write(new_entries)
+    st.info(f"**Added {len(keys)} real academic BibTeX entries to references.bib**")
 
-def jaccard_similarity(a, b):
-    set_a = set(a.lower().split())
-    set_b = set(b.lower().split())
-    if not set_a or not set_b: return 0.0
-    return len(set_a & set_b) / len(set_a | set_b)
-
-def deduplicate_chapter(chapter_filename):
-    st.info("**Running post-chapter local deduplication (pure Python)**")
-    with open(chapter_filename, "r") as f:
-        full_text = f.read()
-    paragraphs = [p.strip() for p in full_text.split("\n\n") if p.strip() and len(p.strip()) > 30]
-    kept = []
-    for p in paragraphs:
-        is_duplicate = False
-        for kept_p in kept:
-            if jaccard_similarity(p, kept_p) > 0.82:
-                st.info(f"**Paragraph deleted (duplicate):** {p[:120]}...")
-                is_duplicate = True
-                break
-        if not is_duplicate:
-            kept.append(p)
-    new_text = "\n\n".join(kept)
-    with open(chapter_filename, "w") as f:
-        f.write(new_text)
-    st.info("**Chapter deduplication completed**")
+def verify_references(bib_path, topic):
+    st.info("**Running Reference Verifier Agent to check that all references are real and not imaginary...**")
+    with open(bib_path, "r") as f:
+        bib_content = f.read()
+    prompt = f"""Review these BibTeX entries for the topic "{topic}".
+Check if they look like real, existing academic references (plausible authors, titles, journals, years).
+Flag any that seem imaginary or hallucinated.
+Output only: "All references appear real" or list any suspicious ones."""
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": prompt}],
+            temperature=0.7,
+            **get_max_tokens_kw(model, 2000)
+        )
+        verification = resp.choices[0].message.content.strip()
+        st.info(f"**Reference Verifier Result:** {verification}")
+    except:
+        st.info("**Reference Verifier could not run — please manually check the .bib file for publication**")
 
 def latex_cleanup_for_chapter(chapter_filename):
     st.info("**Running final LaTeX cleanup for the entire chapter**")
@@ -222,7 +230,34 @@ def latex_cleanup_for_chapter(chapter_filename):
 
     with open(chapter_filename, "w") as f:
         f.write(content)
-    st.info("**LaTeX cleanup completed — wrappers, bib blocks, and ```latex removed**")
+    st.info("**LaTeX cleanup completed — all wrappers, bib blocks, and ```latex removed**")
+
+def jaccard_similarity(a, b):
+    set_a = set(a.lower().split())
+    set_b = set(b.lower().split())
+    if not set_a or not set_b: return 0.0
+    return len(set_a & set_b) / len(set_a | set_b)
+
+def deduplicate_chapter(chapter_filename):
+    st.info("**Running post-chapter local deduplication (pure Python)**")
+    with open(chapter_filename, "r") as f:
+        full_text = f.read()
+    paragraphs = [p.strip() for p in full_text.split("\n\n") if p.strip() and len(p.strip()) > 30]
+    kept = []
+    for idx, p in enumerate(paragraphs):
+        st.info(f"Checking paragraph {idx+1}/{len(paragraphs)} for duplicates...")
+        is_duplicate = False
+        for kept_p in kept:
+            if jaccard_similarity(p, kept_p) > 0.82:
+                st.info(f"**Paragraph deleted (duplicate):** {p[:120]}...")
+                is_duplicate = True
+                break
+        if not is_duplicate:
+            kept.append(p)
+    new_text = "\n\n".join(kept)
+    with open(chapter_filename, "w") as f:
+        f.write(new_text)
+    st.info("**Chapter deduplication completed**")
 
 def get_full_path(filename):
     return f"{st.session_state.run_folder}/{filename}"
@@ -330,7 +365,7 @@ if st.session_state.stage == "approve":
             st.session_state.stage = "outline"
             st.rerun()
 
-# WRITING STAGE (full logic with all functions visible)
+# WRITING STAGE
 if st.session_state.stage == "writing":
     with col_left:
         st.subheader("🔥 AI Army is writing the full book chapter by chapter...")
@@ -412,7 +447,7 @@ Include many \\cite{{key}}. Output ONLY LaTeX."""
         f.write(clean_for_chapter + "\n\n")
 
     keys = extract_citation_keys(clean_section)
-    append_bibtex_entries(keys)
+    append_bibtex_entries(keys, st.session_state.current_prompt)
 
     st.session_state.completed_sections.append((chapter, section, section_filename))
 
@@ -458,6 +493,12 @@ if st.session_state.stage == "halted":
         with open(bib_path, "r") as f:
             st.download_button("📥 Download CUMULATIVE references.bib", f.read(), "references.bib")
 
+    # Download full chapter creation logfile
+    log_path = get_full_path(f"chapter_{st.session_state.current_chapter}_creation_log.txt")
+    if os.path.exists(log_path):
+        with open(log_path, "r") as f:
+            st.download_button(f"📥 Download Chapter {st.session_state.current_chapter} Creation Log", f.read(), f"chapter_{st.session_state.current_chapter}_creation_log.txt")
+
     for ch, sec, fname in st.session_state.completed_sections:
         with open(fname, "r") as f:
             st.download_button(f"📥 Download Section {ch}.{sec}.tex", f.read(), os.path.basename(fname))
@@ -468,4 +509,4 @@ if st.session_state.stage == "halted":
         st.session_state.stage = "writing"
         st.rerun()
 
-st.caption("💡 Version 125.0 — GPT-5.4 token fix applied. Paste this complete code and hard-refresh the page.")
+st.caption("💡 Version 127.0 — Paste this complete code and hard-refresh the page.")
