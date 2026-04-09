@@ -45,7 +45,18 @@ with st.sidebar:
     st.header("⚙️ Settings")
     api_key = st.text_input("OpenAI API Key", type="password", value=os.getenv("OPENAI_API_KEY", ""))
     if api_key: os.environ["OPENAI_API_KEY"] = api_key
-    model = st.selectbox("Model", ["gpt-4o", "gpt-5.4-pro", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-4o-mini"], index=0)
+
+    model = st.selectbox("Model", [
+        "gpt-4o",           # ← SAFE DEFAULT
+        "gpt-5.4-pro",
+        "gpt-5.4",
+        "gpt-5.4-mini",
+        "gpt-5.4-nano",
+        "gpt-4o-mini"
+    ], index=0)
+
+    st.info("**⚠️ IMPORTANT:** GPT-5.4 models are very new. If you get a 404 error, switch to gpt-4o. It is the most stable model right now.")
+
     st.header("📁 Background Documents")
     uploaded_files = st.file_uploader("Upload PDF, DOCX, TXT files", type=["pdf", "docx", "txt"], accept_multiple_files=True)
 
@@ -73,7 +84,7 @@ if os.path.exists("runs"):
 if st.session_state.run_folder:
     st.info(f"**📁 Current run folder:** `{st.session_state.run_folder}`")
 
-# Helper functions
+# Helper functions (unchanged)
 def read_uploaded_file(uploaded_file):
     if uploaded_file.name.lower().endswith(".pdf"):
         reader = PyPDF2.PdfReader(BytesIO(uploaded_file.read()))
@@ -101,11 +112,7 @@ def parse_section_titles(outline_text):
     return titles
 
 def get_max_tokens_kw(model_name, tokens):
-    # Fix from your test results: GPT-5.4 models require max_completion_tokens
-    if model_name.startswith("gpt-5"):
-        return {"max_completion_tokens": tokens}
-    else:
-        return {"max_tokens": tokens}
+    return {"max_completion_tokens": tokens} if "gpt-5" in model_name else {"max_tokens": tokens}
 
 def to_ascii(text: str) -> str:
     return text.encode("ascii", "ignore").decode("ascii") if text else ""
@@ -210,7 +217,6 @@ def latex_cleanup_for_chapter(chapter_filename):
     content = re.sub(r'```', '', content, flags=re.IGNORECASE)
     content = re.sub(r'\\begin\{thebibliography\}.*?\\end\{thebibliography\}', '', content, flags=re.DOTALL | re.IGNORECASE)
     content = re.sub(r'\\bibitem\{.*?\}.*?(?=\n\n|\Z)', '', content, flags=re.DOTALL)
-
     content = re.sub(r'\n{3,}', '\n\n', content)
     content = content.strip()
 
@@ -324,7 +330,7 @@ if st.session_state.stage == "approve":
             st.session_state.stage = "outline"
             st.rerun()
 
-# WRITING STAGE
+# WRITING STAGE (full logic with all functions visible)
 if st.session_state.stage == "writing":
     with col_left:
         st.subheader("🔥 AI Army is writing the full book chapter by chapter...")
@@ -393,6 +399,7 @@ Include many \\cite{{key}}. Output ONLY LaTeX."""
 
     clean_section = f"\\section{{{real_title}}}\n\n" + clean_section
 
+    # Save files
     section_filename = get_full_path(f"chapter_{chapter}_section_{section}.tex")
     with open(section_filename, "w") as f:
         f.write(clean_section)
@@ -415,6 +422,7 @@ Include many \\cite{{key}}. Output ONLY LaTeX."""
     summary_line = f"Section {chapter}.{section} — {real_title}: " + ". ".join(first_sentences) + "."
     st.session_state.covered_topics.append(summary_line)
 
+    # Live preview
     with col_right:
         st.subheader("📜 Live LaTeX Preview")
         latex_preview = st.empty()
@@ -460,4 +468,4 @@ if st.session_state.stage == "halted":
         st.session_state.stage = "writing"
         st.rerun()
 
-st.caption("💡 Version 125.0 — GPT-5.4 token fix applied. Paste this complete code and hard-refresh.")
+st.caption("💡 Version 125.0 — GPT-5.4 token fix applied. Paste this complete code and hard-refresh the page.")
