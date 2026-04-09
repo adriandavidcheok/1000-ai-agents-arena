@@ -34,8 +34,8 @@ for key in ["stage", "current_prompt", "outline", "current_chapter", "current_se
 
 st.title("🌀 1000 AI Agents Arena")
 st.caption("Live in your browser • Shareable link • Massive Book Builder")
-st.markdown("**Version 130.0 — FULL COMPLETE CODE — Organization ID field removed**")
-st.info("✅ App fully loaded. Type your book topic in the chat box at the bottom.")
+st.markdown("**Version 131.0 — Organization ID hardcoded (org-XCfizrQt5UeLdVHLgwtRW8ks)**")
+st.info("✅ App fully loaded with your company Organization ID. Type your book topic below.")
 
 if st.session_state.current_prompt:
     st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
@@ -46,14 +46,13 @@ with st.sidebar:
     api_key = st.text_input("OpenAI API Key", type="password", value=os.getenv("OPENAI_API_KEY", ""))
     if api_key: os.environ["OPENAI_API_KEY"] = api_key
 
-    st.warning("⚠️ If you see a 'no_organization' 401 error, go to https://platform.openai.com/account/organization and add your Organization ID manually.")
-
     model = st.selectbox("Model", ["gpt-4o", "gpt-5.4-pro", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-4o-mini"], index=0)
     st.header("📁 Background Documents")
     uploaded_files = st.file_uploader("Upload PDF, DOCX, TXT files", type=["pdf", "docx", "txt"], accept_multiple_files=True)
 
+# Hardcoded Organization ID + API key
 if api_key:
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, organization="org-XCfizrQt5UeLdVHLgwtRW8ks")
 else:
     client = None
     st.sidebar.error("⚠️ Enter your OpenAI API Key")
@@ -476,4 +475,4 @@ if st.session_state.stage == "halted":
         st.session_state.stage = "writing"
         st.rerun()
 
-st.caption("💡 Version 130.0 — Paste this complete code and hard-refresh the page.")
+st.caption("💡 Version 131.0 — Your Organization ID is now hardcoded. Paste this complete code and hard-refresh the page.")
