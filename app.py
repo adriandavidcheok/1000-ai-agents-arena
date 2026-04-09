@@ -36,7 +36,7 @@ for key in ["stage", "current_prompt", "outline", "current_chapter", "current_se
 with st.container():
     st.title("🌀 1000 AI Agents Arena")
     st.caption("Live in your browser • Shareable link • Massive Book Builder")
-    st.markdown("**Version 124.0 — Chapter Reviewer now ONLY at end of chapter**")
+    st.markdown("**Version 124.0 — LaTeX cleanup runs only at end of chapter**")
     if st.session_state.current_prompt:
         st.success(f"**Current Task (always stays at top):** {st.session_state.current_prompt}")
 
@@ -73,7 +73,7 @@ if os.path.exists("runs"):
 if st.session_state.run_folder:
     st.info(f"**📁 Current run folder:** `{st.session_state.run_folder}`")
 
-# Helper functions (all defined before use)
+# Helper functions
 def read_uploaded_file(uploaded_file):
     if uploaded_file.name.lower().endswith(".pdf"):
         reader = PyPDF2.PdfReader(BytesIO(uploaded_file.read()))
@@ -140,7 +140,7 @@ def ensure_subsection_ends_cleanly(client, model, text: str) -> str:
     return match.group(0) if match else text
 
 def strip_document_wrapper(full_tex: str) -> str:
-    full_tex = re.sub(r'\\documentclass\[.*?\]\{.*?\}', '', full_tex, flags=re.IGNORECASE)
+    full_tex = re.sub(r'\\documentclass$$   .*?   $$\{.*?\}', '', full_tex, flags=re.IGNORECASE)
     full_tex = re.sub(r'\\usepackage\{.*?\}', '', full_tex, flags=re.IGNORECASE)
     full_tex = re.sub(r'\\begin\{document\}', '', full_tex, flags=re.IGNORECASE)
     full_tex = re.sub(r'\\title\{.*?\}', '', full_tex, flags=re.IGNORECASE)
@@ -190,6 +190,36 @@ def deduplicate_chapter(chapter_filename):
     with open(chapter_filename, "w") as f:
         f.write(new_text)
     st.info("**Chapter deduplication completed**")
+
+def latex_cleanup_for_chapter(chapter_filename):
+    st.info("**Running final LaTeX cleanup for the entire chapter**")
+    with open(chapter_filename, "r") as f:
+        content = f.read()
+
+    # 1. Remove document wrapper lines
+    content = re.sub(r'\\documentclass$$   .*?   $$\{.*?\}', '', content, flags=re.IGNORECASE)
+    content = re.sub(r'\\usepackage\{.*?\}', '', content, flags=re.IGNORECASE)
+    content = re.sub(r'\\begin\{document\}', '', content, flags=re.IGNORECASE)
+    content = re.sub(r'\\title\{.*?\}', '', content, flags=re.IGNORECASE)
+    content = re.sub(r'\\maketitle', '', content, flags=re.IGNORECASE)
+    content = re.sub(r'\\end\{document\}', '', content, flags=re.IGNORECASE)
+
+    # 2. Remove ```latex
+    content = re.sub(r'```latex', '', content, flags=re.IGNORECASE)
+    content = re.sub(r'```', '', content, flags=re.IGNORECASE)
+
+    # 3. Remove entire thebibliography block + all \bibitem lines
+    content = re.sub(r'\\begin\{thebibliography\}.*?\\end\{thebibliography\}', '', content, flags=re.DOTALL | re.IGNORECASE)
+    content = re.sub(r'\\bibitem\{.*?\}.*?(?=\n\n|\Z)', '', content, flags=re.DOTALL)
+
+    # Clean extra newlines
+    content = re.sub(r'\n{3,}', '\n\n', content)
+    content = content.strip()
+
+    with open(chapter_filename, "w") as f:
+        f.write(content)
+
+    st.info("**LaTeX cleanup completed — all wrappers, bib blocks, and ```latex removed**")
 
 def get_full_path(filename):
     return f"{st.session_state.run_folder}/{filename}"
@@ -297,7 +327,7 @@ if st.session_state.stage == "approve":
             st.session_state.stage = "outline"
             st.rerun()
 
-# WRITING STAGE — REVIEWER ONLY AT END OF CHAPTER
+# WRITING STAGE
 if st.session_state.stage == "writing":
     with col_left:
         st.subheader("🔥 AI Army is writing the full book chapter by chapter...")
@@ -385,7 +415,6 @@ Include many \\cite{{key}}. Output ONLY LaTeX."""
 
     st.download_button(f"📥 Download Section {chapter}.{section}.tex", open(section_filename, "r").read(), os.path.basename(section_filename))
 
-    # Update covered topics
     first_sentences = clean_section.split(".")[:3]
     summary_line = f"Section {chapter}.{section} — {real_title}: " + ". ".join(first_sentences) + "."
     st.session_state.covered_topics.append(summary_line)
@@ -399,17 +428,10 @@ Include many \\cite{{key}}. Output ONLY LaTeX."""
                 latex_preview.code(line, language="latex")
                 time.sleep(0.08)
 
-    # Move to next section
     st.session_state.current_section += 1
     if st.session_state.current_section > 15:
-        # === ONLY HERE: Chapter Reviewer + Citation Handler + Deduplication ===
-        st.info("**Running Chapter Reviewer Agent to remove duplication on the ENTIRE chapter...**")
-        reviewer = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"Review the entire chapter and remove ALL repetitions. Keep it VERY LONG and coherent. Output ONLY clean LaTeX."}], temperature=0.7, **get_max_tokens_kw(model, 8000))
-        # For simplicity we re-apply to the last section (you can extend this to full chapter if needed)
-        st.info("**Running Citation Handler Agent on the entire chapter...**")
-        cleaner = client.chat.completions.create(model=model, messages=[{"role": "system", "content": f"Remove any BibTeX blocks, keep only clean LaTeX with \\cite{{key}}. Output ONLY LaTeX."}], temperature=0.7, **get_max_tokens_kw(model, 8000))
-
         deduplicate_chapter(chapter_filename)
+        latex_cleanup_for_chapter(chapter_filename)   # <--- NEW CLEANUP CALL
         with open(chapter_filename, "a") as f:
             f.write(r"\end{document}")
         st.session_state.stage = "halted"
@@ -443,4 +465,4 @@ if st.session_state.stage == "halted":
         st.session_state.stage = "writing"
         st.rerun()
 
-st.caption("💡 Version 124.0 — Chapter Reviewer now runs only at the END of the chapter. Paste this complete code and hard-refresh the page.")
+st.caption("💡 Version 124.0 — LaTeX cleanup now runs at end of chapter. Paste this complete code and hard-refresh.")
