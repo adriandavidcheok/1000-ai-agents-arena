@@ -245,7 +245,7 @@ if uploaded_files:
     st.session_state.background_corpus = "\n\n".join(background_texts)
     st.sidebar.success(f"Loaded {len(uploaded_files)} background documents")
 
-# Chat input (always visible at bottom)
+# Chat input — always at bottom
 if prompt := st.chat_input("Ask the swarm anything..."):
     st.session_state.current_prompt = prompt
     st.session_state.stage = "outline"
@@ -313,7 +313,6 @@ Use this exact format:
             st.session_state.outline = "# Hard Fallback Outline..."
 
     st.session_state.stage = "approve"
-    st.info("✅ Outline complete — switching to approve stage...")
     st.rerun()
 
 # APPROVE STAGE
@@ -341,7 +340,7 @@ if st.session_state.stage == "approve":
             st.session_state.stage = "outline"
             st.rerun()
 
-# WRITING STAGE (full code)
+# WRITING STAGE
 if st.session_state.stage == "writing":
     st.info("✅ ENTERED WRITING STAGE")
     with col_left:
@@ -357,8 +356,114 @@ if st.session_state.stage == "writing":
             army_placeholder.markdown("\n\n".join(latest_agents))
             time.sleep(0.08)
 
-    # (Writing stage code is the same as previous full versions — all logging, sanitization, deduplication, etc.)
+    chapter = st.session_state.current_chapter
+    section = st.session_state.current_section
+    real_title = st.session_state.section_titles.get((chapter, section), f"Section {section}")
+    st.info(f"**CURRENTLY WRITING FULL SECTION TITLE: Chapter {chapter} - Section {section} — {real_title}**")
 
-    # ... (The rest of writing, halted, etc. are identical to the working versions you had before. All functions are logged.)
+    covered_summary = "\n".join(st.session_state.covered_topics) if st.session_state.covered_topics else "None yet"
+    st.info(f"**Covered Topics Summary (no repetition):** {covered_summary}")
 
-st.caption("💡 Version 142.0 — FULL COMPLETE CODE. Paste this and hard-refresh the page.")
+    agent = "Professor at Harvard University"
+    agent_id = f"Agent #{random.randint(1000,9999)}"
+    st.info(f"• {agent_id} — {agent} is drafting '{real_title}'...")
+
+    prompt_text = f"""You are {agent}. Write a VERY LONG detailed LaTeX section titled '{real_title}' about the topic: {st.session_state.current_prompt}.
+DO NOT repeat ANY of these already covered topics:
+{covered_summary}
+Background corpus (use only if relevant):
+{st.session_state.background_corpus[:4000] if st.session_state.background_corpus else "None"}
+Include many \\cite{{key}}. Output ONLY LaTeX."""
+
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": prompt_text}],
+            temperature=0.8,
+            max_tokens=3200
+        )
+        section_text = resp.choices[0].message.content.strip()
+    except Exception as e:
+        st.error(f"OpenAI error: {str(e)}")
+        st.stop()
+
+    if len(section_text) < 100:
+        st.error("Agent returned empty or too short content")
+        st.stop()
+
+    st.info("Applying desktop sanitization functions...")
+    clean_section = to_ascii(section_text)
+    clean_section = sanitize_latex_output_for_tex(clean_section)
+    clean_section = remove_robotic_paragraph_openers(clean_section)
+    clean_section = ensure_subsection_ends_cleanly(client, model, clean_section)
+    clean_section = strip_document_wrapper(clean_section)
+
+    clean_section = f"\\section{{{real_title}}}\n\n" + clean_section
+
+    section_filename = get_full_path(f"chapter_{chapter}_section_{section}.tex")
+    with open(section_filename, "w") as f:
+        f.write(clean_section)
+
+    chapter_filename = get_full_path(f"chapter_{chapter}.tex")
+    with open(chapter_filename, "a") as f:
+        if section == 1:
+            f.write(r"\documentclass[11pt]{article}\usepackage{amsmath,amssymb}\begin{document}\title{Chapter " + str(chapter) + "}\maketitle\n\n")
+        f.write(clean_section + "\n\n")
+
+    keys = extract_citation_keys(clean_section)
+    append_bibtex_entries(keys, st.session_state.current_prompt)
+
+    st.session_state.completed_sections.append((chapter, section, section_filename))
+
+    st.download_button(f"📥 Download Section {chapter}.{section}.tex", open(section_filename, "r").read(), os.path.basename(section_filename))
+
+    first_sentences = clean_section.split(".")[:3]
+    summary_line = f"Section {chapter}.{section} — {real_title}: " + ". ".join(first_sentences) + "."
+    st.session_state.covered_topics.append(summary_line)
+
+    with col_right:
+        st.subheader("📜 Live LaTeX Preview")
+        latex_preview = st.empty()
+        for line in clean_section.split("\n"):
+            if line.strip():
+                latex_preview.code(line, language="latex")
+                time.sleep(0.08)
+
+    st.session_state.current_section += 1
+    if st.session_state.current_section > 15:
+        deduplicate_chapter(chapter_filename)
+        latex_cleanup_for_chapter(chapter_filename)
+        with open(chapter_filename, "a") as f:
+            f.write(r"\end{document}")
+        st.session_state.stage = "halted"
+        st.rerun()
+    else:
+        st.rerun()
+
+# HALTED STAGE
+if st.session_state.stage == "halted":
+    st.success("🚨 HALT — Chapter 1 is fully finished!")
+    st.balloons()
+    st.markdown('<audio autoplay><source src="https://www.soundjay.com/buttons/beep-07.mp3" type="audio/mpeg"></audio>', unsafe_allow_html=True)
+
+    chapter_filename = get_full_path("chapter_1.tex")
+    if os.path.exists(chapter_filename):
+        with open(chapter_filename, "r") as f:
+            st.download_button("📥 Download FULL Chapter 1.tex", f.read(), "chapter_1.tex")
+
+    bib_path = get_full_path("references.bib")
+    if os.path.exists(bib_path):
+        with open(bib_path, "r") as f:
+            st.download_button("📥 Download CUMULATIVE references.bib", f.read(), "references.bib")
+
+    for ch, sec, fname in st.session_state.completed_sections:
+        with open(fname, "r") as f:
+            st.download_button(f"📥 Download Section {ch}.{sec}.tex", f.read(), os.path.basename(fname))
+
+    if st.button("✅ Continue to Chapters 2–10"):
+        st.session_state.current_chapter = 2
+        st.session_state.current_section = 1
+        st.session_state.stage = "writing"
+        st.rerun()
+
+st.caption("💡 Version 142.0 — Paste this complete code and hard-refresh the page.")
